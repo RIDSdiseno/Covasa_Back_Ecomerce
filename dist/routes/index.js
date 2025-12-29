@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const healthController_1 = require("../controllers/healthController");
+const router = (0, express_1.Router)();
+router.get("/", (_req, res) => {
+    res.json({
+        message: "Bienvenido a la API de Covasa",
+    });
+});
+router.get("/health", healthController_1.healthCheck);
+exports.default = router;
