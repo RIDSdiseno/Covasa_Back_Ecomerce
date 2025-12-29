@@ -1,312 +1,246 @@
 -- CreateEnum
-CREATE TYPE "EstadoCarrito" AS ENUM ('Activo', 'Convertido', 'Abandonado');
+CREATE TYPE "EcommerceEstadoCarrito" AS ENUM ('ACTIVO', 'CONVERTIDO', 'ABANDONADO');
 
 -- CreateEnum
-CREATE TYPE "EstadoCotizacion" AS ENUM ('Recibida', 'EnRevision', 'Cotizada', 'Aprobada', 'Rechazada', 'Cancelada');
+CREATE TYPE "EcommerceEstadoCotizacion" AS ENUM ('NUEVA', 'EN_REVISION', 'RESPONDIDA', 'CERRADA');
 
 -- CreateEnum
-CREATE TYPE "MetodoPago" AS ENUM ('TRANSBANK', 'APPLE_PAY', 'TRANSFERENCIA', 'OTRO');
+CREATE TYPE "EcommerceEstadoPedido" AS ENUM ('CREADO', 'PAGADO', 'EN_PREPARACION', 'ENVIADO', 'ENTREGADO', 'CANCELADO');
 
 -- CreateEnum
-CREATE TYPE "EstadoPago" AS ENUM ('Pendiente', 'Iniciado', 'Autorizado', 'Rechazado', 'Anulado');
+CREATE TYPE "EcommerceMetodoPago" AS ENUM ('TRANSBANK', 'APPLE_PAY', 'TRANSFERENCIA', 'OTRO');
 
 -- CreateEnum
-CREATE TYPE "EstadoPedido" AS ENUM ('Recibido', 'EnPreparacion', 'Enviado', 'Entregado', 'Cancelado');
-
--- CreateEnum
-CREATE TYPE "OrigenRegistro" AS ENUM ('CRM', 'ECOMMERCE');
+CREATE TYPE "EcommerceEstadoPago" AS ENUM ('PENDIENTE', 'CONFIRMADO', 'RECHAZADO');
 
 -- CreateTable
-CREATE TABLE "Carrito" (
+CREATE TABLE "EcommerceCarrito" (
     "id" TEXT NOT NULL,
-    "token" TEXT NOT NULL,
     "clienteId" TEXT,
-    "email" TEXT,
-    "estado" "EstadoCarrito" NOT NULL DEFAULT 'Activo',
+    "estado" "EcommerceEstadoCarrito" NOT NULL DEFAULT 'ACTIVO',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Carrito_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "EcommerceCarrito_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "CarritoItem" (
+CREATE TABLE "EcommerceCarritoItem" (
     "id" TEXT NOT NULL,
     "carritoId" TEXT NOT NULL,
     "productoId" TEXT NOT NULL,
-    "nombreProducto" TEXT NOT NULL,
-    "descripcion" TEXT,
-    "unidad" TEXT NOT NULL,
     "cantidad" INTEGER NOT NULL,
-    "precioUnitarioNeto" INTEGER NOT NULL,
-    "subtotalNeto" INTEGER NOT NULL,
+    "precioUnitarioNetoSnapshot" INTEGER NOT NULL,
+    "subtotalNetoSnapshot" INTEGER NOT NULL,
+    "ivaPctSnapshot" INTEGER NOT NULL,
+    "ivaMontoSnapshot" INTEGER NOT NULL,
+    "totalSnapshot" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "CarritoItem_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "EcommerceCarritoItem_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "SolicitudCotizacion" (
+CREATE TABLE "EcommerceCotizacion" (
     "id" TEXT NOT NULL,
-    "carritoId" TEXT,
+    "correlativo" SERIAL NOT NULL,
+    "codigo" TEXT NOT NULL,
+    "origen" TEXT NOT NULL DEFAULT 'ECOMMERCE',
     "clienteId" TEXT,
     "nombreContacto" TEXT NOT NULL,
-    "empresa" TEXT,
     "email" TEXT NOT NULL,
     "telefono" TEXT NOT NULL,
-    "tipoObra" TEXT NOT NULL,
-    "ubicacion" TEXT NOT NULL,
+    "empresa" TEXT,
+    "rut" TEXT,
     "observaciones" TEXT,
-    "ocNumero" TEXT,
+    "ocCliente" TEXT,
     "subtotalNeto" INTEGER NOT NULL,
-    "ivaPct" INTEGER NOT NULL DEFAULT 19,
-    "ivaMonto" INTEGER NOT NULL,
+    "iva" INTEGER NOT NULL,
     "total" INTEGER NOT NULL,
-    "moneda" TEXT NOT NULL DEFAULT 'CLP',
-    "estado" "EstadoCotizacion" NOT NULL DEFAULT 'Recibida',
-    "origen" "OrigenRegistro" NOT NULL DEFAULT 'ECOMMERCE',
-    "canal" TEXT,
-    "origenRef" TEXT,
-    "contenidoHash" TEXT,
-    "ipHash" TEXT,
-    "userAgentHash" TEXT,
-    "fingerprintHash" TEXT,
+    "estado" "EcommerceEstadoCotizacion" NOT NULL DEFAULT 'NUEVA',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "SolicitudCotizacion_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "EcommerceCotizacion_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "SolicitudCotizacionItem" (
+CREATE TABLE "EcommerceCotizacionItem" (
     "id" TEXT NOT NULL,
-    "solicitudCotizacionId" TEXT NOT NULL,
+    "cotizacionId" TEXT NOT NULL,
     "productoId" TEXT NOT NULL,
-    "nombreProducto" TEXT NOT NULL,
-    "descripcion" TEXT,
-    "unidad" TEXT NOT NULL,
+    "descripcionSnapshot" TEXT NOT NULL,
     "cantidad" INTEGER NOT NULL,
-    "precioUnitarioNeto" INTEGER NOT NULL,
-    "subtotalNeto" INTEGER NOT NULL,
-    "ivaPct" INTEGER NOT NULL,
-    "ivaMonto" INTEGER NOT NULL,
-    "total" INTEGER NOT NULL,
+    "precioUnitarioNetoSnapshot" INTEGER NOT NULL,
+    "subtotalNetoSnapshot" INTEGER NOT NULL,
+    "ivaPctSnapshot" INTEGER NOT NULL,
+    "ivaMontoSnapshot" INTEGER NOT NULL,
+    "totalSnapshot" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "SolicitudCotizacionItem_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "EcommerceCotizacionItem_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Pedido" (
+CREATE TABLE "EcommercePedido" (
     "id" TEXT NOT NULL,
-    "solicitudCotizacionId" TEXT,
+    "correlativo" SERIAL NOT NULL,
+    "codigo" TEXT NOT NULL,
     "clienteId" TEXT,
-    "nombreContacto" TEXT NOT NULL,
-    "empresa" TEXT,
-    "email" TEXT NOT NULL,
-    "telefono" TEXT NOT NULL,
-    "tipoObra" TEXT,
-    "ubicacion" TEXT,
-    "observaciones" TEXT,
+    "despachoNombre" TEXT,
+    "despachoTelefono" TEXT,
+    "despachoEmail" TEXT,
+    "despachoDireccion" TEXT,
+    "despachoComuna" TEXT,
+    "despachoCiudad" TEXT,
+    "despachoRegion" TEXT,
+    "despachoNotas" TEXT,
     "subtotalNeto" INTEGER NOT NULL,
-    "ivaPct" INTEGER NOT NULL DEFAULT 19,
-    "ivaMonto" INTEGER NOT NULL,
+    "iva" INTEGER NOT NULL,
     "total" INTEGER NOT NULL,
-    "moneda" TEXT NOT NULL DEFAULT 'CLP',
-    "estado" "EstadoPedido" NOT NULL DEFAULT 'Recibido',
-    "origen" "OrigenRegistro" NOT NULL DEFAULT 'ECOMMERCE',
-    "canal" TEXT,
-    "origenRef" TEXT,
+    "estado" "EcommerceEstadoPedido" NOT NULL DEFAULT 'CREADO',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Pedido_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "EcommercePedido_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "PedidoItem" (
+CREATE TABLE "EcommercePedidoItem" (
     "id" TEXT NOT NULL,
     "pedidoId" TEXT NOT NULL,
     "productoId" TEXT NOT NULL,
-    "nombreProducto" TEXT NOT NULL,
-    "descripcion" TEXT,
-    "unidad" TEXT NOT NULL,
+    "descripcionSnapshot" TEXT NOT NULL,
     "cantidad" INTEGER NOT NULL,
-    "precioUnitarioNeto" INTEGER NOT NULL,
-    "subtotalNeto" INTEGER NOT NULL,
-    "ivaPct" INTEGER NOT NULL,
-    "ivaMonto" INTEGER NOT NULL,
-    "total" INTEGER NOT NULL,
+    "precioUnitarioNetoSnapshot" INTEGER NOT NULL,
+    "subtotalNetoSnapshot" INTEGER NOT NULL,
+    "ivaPctSnapshot" INTEGER NOT NULL,
+    "ivaMontoSnapshot" INTEGER NOT NULL,
+    "totalSnapshot" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "PedidoItem_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "EcommercePedidoItem_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Pago" (
+CREATE TABLE "EcommercePago" (
     "id" TEXT NOT NULL,
-    "solicitudCotizacionId" TEXT,
-    "pedidoId" TEXT,
-    "metodo" "MetodoPago" NOT NULL,
-    "estado" "EstadoPago" NOT NULL DEFAULT 'Pendiente',
+    "pedidoId" TEXT NOT NULL,
+    "metodo" "EcommerceMetodoPago" NOT NULL,
+    "estado" "EcommerceEstadoPago" NOT NULL DEFAULT 'PENDIENTE',
     "monto" INTEGER NOT NULL,
-    "moneda" TEXT NOT NULL DEFAULT 'CLP',
-    "referenciaExterna" TEXT,
-    "payload" JSONB,
-    "origen" "OrigenRegistro" NOT NULL DEFAULT 'ECOMMERCE',
-    "canal" TEXT,
-    "origenRef" TEXT,
+    "referencia" TEXT,
+    "evidenciaUrl" TEXT,
+    "gatewayPayloadJson" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Pago_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "EcommercePago_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "MensajeNotificacion" (
+CREATE TABLE "EcommerceNotificacion" (
     "id" TEXT NOT NULL,
     "tipo" TEXT NOT NULL,
+    "referenciaTabla" TEXT NOT NULL,
+    "referenciaId" TEXT NOT NULL,
     "titulo" TEXT NOT NULL,
-    "mensaje" TEXT NOT NULL,
-    "entidad" TEXT,
-    "entidadId" TEXT,
-    "origen" "OrigenRegistro" NOT NULL DEFAULT 'ECOMMERCE',
-    "canal" TEXT,
+    "detalle" TEXT NOT NULL,
     "leido" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "solicitudCotizacionId" TEXT,
 
-    CONSTRAINT "MensajeNotificacion_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "EcommerceNotificacion_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Carrito_token_key" ON "Carrito"("token");
+CREATE INDEX "EcommerceCarrito_clienteId_idx" ON "EcommerceCarrito"("clienteId");
 
 -- CreateIndex
-CREATE INDEX "Carrito_clienteId_idx" ON "Carrito"("clienteId");
+CREATE INDEX "EcommerceCarrito_estado_idx" ON "EcommerceCarrito"("estado");
 
 -- CreateIndex
-CREATE INDEX "Carrito_estado_idx" ON "Carrito"("estado");
+CREATE INDEX "EcommerceCarritoItem_carritoId_idx" ON "EcommerceCarritoItem"("carritoId");
 
 -- CreateIndex
-CREATE INDEX "CarritoItem_carritoId_idx" ON "CarritoItem"("carritoId");
+CREATE INDEX "EcommerceCarritoItem_productoId_idx" ON "EcommerceCarritoItem"("productoId");
 
 -- CreateIndex
-CREATE INDEX "CarritoItem_productoId_idx" ON "CarritoItem"("productoId");
+CREATE UNIQUE INDEX "EcommerceCarritoItem_carritoId_productoId_key" ON "EcommerceCarritoItem"("carritoId", "productoId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "CarritoItem_carritoId_productoId_key" ON "CarritoItem"("carritoId", "productoId");
+CREATE UNIQUE INDEX "EcommerceCotizacion_codigo_key" ON "EcommerceCotizacion"("codigo");
 
 -- CreateIndex
-CREATE INDEX "SolicitudCotizacion_carritoId_idx" ON "SolicitudCotizacion"("carritoId");
+CREATE INDEX "EcommerceCotizacion_clienteId_idx" ON "EcommerceCotizacion"("clienteId");
 
 -- CreateIndex
-CREATE INDEX "SolicitudCotizacion_clienteId_idx" ON "SolicitudCotizacion"("clienteId");
+CREATE INDEX "EcommerceCotizacion_estado_idx" ON "EcommerceCotizacion"("estado");
 
 -- CreateIndex
-CREATE INDEX "SolicitudCotizacion_estado_idx" ON "SolicitudCotizacion"("estado");
+CREATE INDEX "EcommerceCotizacionItem_cotizacionId_idx" ON "EcommerceCotizacionItem"("cotizacionId");
 
 -- CreateIndex
-CREATE INDEX "SolicitudCotizacion_origen_idx" ON "SolicitudCotizacion"("origen");
+CREATE INDEX "EcommerceCotizacionItem_productoId_idx" ON "EcommerceCotizacionItem"("productoId");
 
 -- CreateIndex
-CREATE INDEX "SolicitudCotizacion_contenidoHash_idx" ON "SolicitudCotizacion"("contenidoHash");
+CREATE UNIQUE INDEX "EcommercePedido_codigo_key" ON "EcommercePedido"("codigo");
 
 -- CreateIndex
-CREATE INDEX "SolicitudCotizacion_ipHash_idx" ON "SolicitudCotizacion"("ipHash");
+CREATE INDEX "EcommercePedido_clienteId_idx" ON "EcommercePedido"("clienteId");
 
 -- CreateIndex
-CREATE INDEX "SolicitudCotizacion_userAgentHash_idx" ON "SolicitudCotizacion"("userAgentHash");
+CREATE INDEX "EcommercePedido_estado_idx" ON "EcommercePedido"("estado");
 
 -- CreateIndex
-CREATE INDEX "SolicitudCotizacion_fingerprintHash_idx" ON "SolicitudCotizacion"("fingerprintHash");
+CREATE INDEX "EcommercePedidoItem_pedidoId_idx" ON "EcommercePedidoItem"("pedidoId");
 
 -- CreateIndex
-CREATE INDEX "SolicitudCotizacionItem_solicitudCotizacionId_idx" ON "SolicitudCotizacionItem"("solicitudCotizacionId");
+CREATE INDEX "EcommercePedidoItem_productoId_idx" ON "EcommercePedidoItem"("productoId");
 
 -- CreateIndex
-CREATE INDEX "SolicitudCotizacionItem_productoId_idx" ON "SolicitudCotizacionItem"("productoId");
+CREATE INDEX "EcommercePago_pedidoId_idx" ON "EcommercePago"("pedidoId");
 
 -- CreateIndex
-CREATE INDEX "Pedido_clienteId_idx" ON "Pedido"("clienteId");
+CREATE INDEX "EcommercePago_estado_idx" ON "EcommercePago"("estado");
 
 -- CreateIndex
-CREATE INDEX "Pedido_solicitudCotizacionId_idx" ON "Pedido"("solicitudCotizacionId");
+CREATE INDEX "EcommerceNotificacion_tipo_idx" ON "EcommerceNotificacion"("tipo");
 
 -- CreateIndex
-CREATE INDEX "Pedido_estado_idx" ON "Pedido"("estado");
+CREATE INDEX "EcommerceNotificacion_leido_idx" ON "EcommerceNotificacion"("leido");
 
 -- CreateIndex
-CREATE INDEX "Pedido_origen_idx" ON "Pedido"("origen");
+CREATE INDEX "EcommerceNotificacion_referenciaTabla_idx" ON "EcommerceNotificacion"("referenciaTabla");
 
 -- CreateIndex
-CREATE INDEX "PedidoItem_pedidoId_idx" ON "PedidoItem"("pedidoId");
-
--- CreateIndex
-CREATE INDEX "PedidoItem_productoId_idx" ON "PedidoItem"("productoId");
-
--- CreateIndex
-CREATE INDEX "Pago_solicitudCotizacionId_idx" ON "Pago"("solicitudCotizacionId");
-
--- CreateIndex
-CREATE INDEX "Pago_pedidoId_idx" ON "Pago"("pedidoId");
-
--- CreateIndex
-CREATE INDEX "Pago_estado_idx" ON "Pago"("estado");
-
--- CreateIndex
-CREATE INDEX "Pago_origen_idx" ON "Pago"("origen");
-
--- CreateIndex
-CREATE INDEX "MensajeNotificacion_solicitudCotizacionId_idx" ON "MensajeNotificacion"("solicitudCotizacionId");
-
--- CreateIndex
-CREATE INDEX "MensajeNotificacion_leido_idx" ON "MensajeNotificacion"("leido");
-
--- CreateIndex
-CREATE INDEX "MensajeNotificacion_origen_idx" ON "MensajeNotificacion"("origen");
-
--- CreateIndex
-CREATE INDEX "MensajeNotificacion_tipo_idx" ON "MensajeNotificacion"("tipo");
+CREATE INDEX "EcommerceNotificacion_referenciaId_idx" ON "EcommerceNotificacion"("referenciaId");
 
 -- AddForeignKey
-ALTER TABLE "Carrito" ADD CONSTRAINT "Carrito_clienteId_fkey" FOREIGN KEY ("clienteId") REFERENCES "Cliente"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "EcommerceCarrito" ADD CONSTRAINT "EcommerceCarrito_clienteId_fkey" FOREIGN KEY ("clienteId") REFERENCES "Cliente"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "CarritoItem" ADD CONSTRAINT "CarritoItem_carritoId_fkey" FOREIGN KEY ("carritoId") REFERENCES "Carrito"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "EcommerceCarritoItem" ADD CONSTRAINT "EcommerceCarritoItem_carritoId_fkey" FOREIGN KEY ("carritoId") REFERENCES "EcommerceCarrito"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "CarritoItem" ADD CONSTRAINT "CarritoItem_productoId_fkey" FOREIGN KEY ("productoId") REFERENCES "Producto"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "EcommerceCarritoItem" ADD CONSTRAINT "EcommerceCarritoItem_productoId_fkey" FOREIGN KEY ("productoId") REFERENCES "Producto"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "SolicitudCotizacion" ADD CONSTRAINT "SolicitudCotizacion_clienteId_fkey" FOREIGN KEY ("clienteId") REFERENCES "Cliente"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "EcommerceCotizacion" ADD CONSTRAINT "EcommerceCotizacion_clienteId_fkey" FOREIGN KEY ("clienteId") REFERENCES "Cliente"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "SolicitudCotizacion" ADD CONSTRAINT "SolicitudCotizacion_carritoId_fkey" FOREIGN KEY ("carritoId") REFERENCES "Carrito"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "EcommerceCotizacionItem" ADD CONSTRAINT "EcommerceCotizacionItem_cotizacionId_fkey" FOREIGN KEY ("cotizacionId") REFERENCES "EcommerceCotizacion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "SolicitudCotizacionItem" ADD CONSTRAINT "SolicitudCotizacionItem_solicitudCotizacionId_fkey" FOREIGN KEY ("solicitudCotizacionId") REFERENCES "SolicitudCotizacion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "EcommerceCotizacionItem" ADD CONSTRAINT "EcommerceCotizacionItem_productoId_fkey" FOREIGN KEY ("productoId") REFERENCES "Producto"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "SolicitudCotizacionItem" ADD CONSTRAINT "SolicitudCotizacionItem_productoId_fkey" FOREIGN KEY ("productoId") REFERENCES "Producto"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "EcommercePedido" ADD CONSTRAINT "EcommercePedido_clienteId_fkey" FOREIGN KEY ("clienteId") REFERENCES "Cliente"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Pedido" ADD CONSTRAINT "Pedido_clienteId_fkey" FOREIGN KEY ("clienteId") REFERENCES "Cliente"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "EcommercePedidoItem" ADD CONSTRAINT "EcommercePedidoItem_pedidoId_fkey" FOREIGN KEY ("pedidoId") REFERENCES "EcommercePedido"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Pedido" ADD CONSTRAINT "Pedido_solicitudCotizacionId_fkey" FOREIGN KEY ("solicitudCotizacionId") REFERENCES "SolicitudCotizacion"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "EcommercePedidoItem" ADD CONSTRAINT "EcommercePedidoItem_productoId_fkey" FOREIGN KEY ("productoId") REFERENCES "Producto"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "PedidoItem" ADD CONSTRAINT "PedidoItem_pedidoId_fkey" FOREIGN KEY ("pedidoId") REFERENCES "Pedido"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "PedidoItem" ADD CONSTRAINT "PedidoItem_productoId_fkey" FOREIGN KEY ("productoId") REFERENCES "Producto"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Pago" ADD CONSTRAINT "Pago_solicitudCotizacionId_fkey" FOREIGN KEY ("solicitudCotizacionId") REFERENCES "SolicitudCotizacion"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Pago" ADD CONSTRAINT "Pago_pedidoId_fkey" FOREIGN KEY ("pedidoId") REFERENCES "Pedido"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "MensajeNotificacion" ADD CONSTRAINT "MensajeNotificacion_solicitudCotizacionId_fkey" FOREIGN KEY ("solicitudCotizacionId") REFERENCES "SolicitudCotizacion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "EcommercePago" ADD CONSTRAINT "EcommercePago_pedidoId_fkey" FOREIGN KEY ("pedidoId") REFERENCES "EcommercePedido"("id") ON DELETE CASCADE ON UPDATE CASCADE;

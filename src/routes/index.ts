@@ -3,6 +3,7 @@ import { healthCheck } from "../controllers/healthController";
 import productosRouter from "./productos";
 import cotizacionesRouter from "./cotizaciones";
 import pagosRouter from "./pagos";
+import ecommerceRouter from "../modules/ecommerce";
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.get("/health", healthCheck);
 router.use("/productos", productosRouter);
 router.use("/cotizaciones", cotizacionesRouter);
 router.use("/pagos", pagosRouter);
+router.use("/ecommerce", ecommerceRouter);
 
 export default router;
