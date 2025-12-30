@@ -24,15 +24,20 @@ const mapearProducto = (producto: ProductoBase) => {
     nombre: producto.nombre,
     descripcion: producto.nombre,
     unidad: producto.unidadMedida,
+    unidadMedida: producto.unidadMedida,
     fotoUrl: producto.fotoUrl,
     tipo: producto.tipo,
     precioNeto,
     precioLista: producto.precioGeneral,
+    precioGeneral: producto.precioGeneral,
     precioConDescuento: producto.precioConDescto,
+    precioConDescto: producto.precioConDescto,
     stockDisponible,
   };
 };
 
+// Lista productos reales desde Producto.
+// Inputs: filtros q/tipo/limit/offset. Output: productos con precio neto y stock disponible.
 export const listarProductosCatalogo = async (filtros: {
   q?: string;
   tipo?: ProductoTipo;
@@ -43,6 +48,7 @@ export const listarProductosCatalogo = async (filtros: {
   return productos.map(mapearProducto);
 };
 
+// Obtiene un producto por id y valida existencia.
 export const obtenerProductoCatalogo = async (id: string) => {
   const producto = await buscarProductoPorId(id);
   if (!producto) {

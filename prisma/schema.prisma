@@ -7,19 +7,19 @@ datasource db {
 }
 
 model Cliente {
-  id              String       @id
-  nombre          String
-  rut             String?
-  email           String?
-  telefono        String?
-  estado          ClientStatus @default(Activo)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime
-  ciudad          String?
-  comuna          String?
-  direccion       String?
-  personaContacto String?
-  region          String?
+  id                    String                @id
+  nombre                String
+  rut                   String?
+  email                 String?
+  telefono              String?
+  estado                ClientStatus          @default(Activo)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime
+  ciudad                String?
+  comuna                String?
+  direccion             String?
+  personaContacto       String?
+  region                String?
   ecommerceCarritos     EcommerceCarrito[]
   ecommerceCotizaciones EcommerceCotizacion[]
   ecommercePedidos      EcommercePedido[]
@@ -70,16 +70,18 @@ model ImportLote {
 }
 
 model Inventario {
-  id              String            @id
-  productoId      String
-  codigo          String?
-  stock           Int               @default(0)
-  minimo          Int               @default(0)
-  ubicacion       String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime
-  Producto        Producto          @relation(fields: [productoId], references: [id], onDelete: Cascade)
-  StockMovimiento StockMovimiento[]
+  id                String             @id
+  productoId        String
+  codigo            String?
+  stock             Int                @default(0)
+  minimo            Int                @default(0)
+  ubicacion         String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime
+  Producto          Producto           @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  StockAlert        StockAlert[]
+  StockCriticalRule StockCriticalRule?
+  StockMovimiento   StockMovimiento[]
 
   @@index([productoId])
 }
@@ -102,22 +104,22 @@ model PrecioProveedor {
 }
 
 model Producto {
-  id              String            @id
-  sku             String?           @unique
-  nombre          String
-  unidadMedida    String            @default("unidad")
-  fotoUrl         String?
-  precioConDescto Int               @default(0)
-  precioGeneral   Int               @default(0)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime
-  tipo            ProductoTipo      @default(Producto)
-  fotoPublicId    String?
-  Inventario      Inventario[]
-  PrecioProveedor PrecioProveedor[]
+  id                       String                    @id
+  sku                      String?                   @unique
+  nombre                   String
+  unidadMedida             String                    @default("unidad")
+  fotoUrl                  String?
+  precioConDescto          Int                       @default(0)
+  precioGeneral            Int                       @default(0)
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime
+  tipo                     ProductoTipo              @default(Producto)
+  fotoPublicId             String?
   ecommerceCarritoItems    EcommerceCarritoItem[]
   ecommerceCotizacionItems EcommerceCotizacionItem[]
   ecommercePedidoItems     EcommercePedidoItem[]
+  Inventario               Inventario[]
+  PrecioProveedor          PrecioProveedor[]
 
   @@index([nombre])
   @@index([tipo])
@@ -147,6 +149,194 @@ model StockMovimiento {
   Inventario   Inventario          @relation(fields: [inventarioId], references: [id], onDelete: Cascade)
 
   @@index([inventarioId])
+}
+
+model EcommerceCarrito {
+  id        String                 @id @default(cuid())
+  clienteId String?
+  estado    EcommerceEstadoCarrito @default(ACTIVO)
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
+  cliente   Cliente?               @relation(fields: [clienteId], references: [id])
+  items     EcommerceCarritoItem[]
+
+  @@index([clienteId])
+  @@index([estado])
+}
+
+model EcommerceCarritoItem {
+  id                         String           @id @default(cuid())
+  carritoId                  String
+  productoId                 String
+  cantidad                   Int
+  precioUnitarioNetoSnapshot Int
+  subtotalNetoSnapshot       Int
+  ivaPctSnapshot             Int
+  ivaMontoSnapshot           Int
+  totalSnapshot              Int
+  createdAt                  DateTime         @default(now())
+  carrito                    EcommerceCarrito @relation(fields: [carritoId], references: [id], onDelete: Cascade)
+  producto                   Producto         @relation(fields: [productoId], references: [id])
+
+  @@unique([carritoId, productoId])
+  @@index([carritoId])
+  @@index([productoId])
+}
+
+model EcommerceCotizacion {
+  id             String                    @id @default(cuid())
+  correlativo    Int                       @default(autoincrement())
+  codigo         String                    @unique
+  origen         String                    @default("ECOMMERCE")
+  clienteId      String?
+  nombreContacto String
+  email          String
+  telefono       String
+  empresa        String?
+  rut            String?
+  observaciones  String?
+  ocCliente      String?
+  subtotalNeto   Int
+  iva            Int
+  total          Int
+  estado         EcommerceEstadoCotizacion @default(NUEVA)
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  cliente        Cliente?                  @relation(fields: [clienteId], references: [id])
+  items          EcommerceCotizacionItem[]
+
+  @@index([clienteId])
+  @@index([estado])
+}
+
+model EcommerceCotizacionItem {
+  id                         String              @id @default(cuid())
+  cotizacionId               String
+  productoId                 String
+  descripcionSnapshot        String
+  cantidad                   Int
+  precioUnitarioNetoSnapshot Int
+  subtotalNetoSnapshot       Int
+  ivaPctSnapshot             Int
+  ivaMontoSnapshot           Int
+  totalSnapshot              Int
+  createdAt                  DateTime            @default(now())
+  cotizacion                 EcommerceCotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  producto                   Producto            @relation(fields: [productoId], references: [id])
+
+  @@index([cotizacionId])
+  @@index([productoId])
+}
+
+model EcommercePedido {
+  id                String                @id @default(cuid())
+  correlativo       Int                   @default(autoincrement())
+  codigo            String                @unique
+  clienteId         String?
+  despachoNombre    String?
+  despachoTelefono  String?
+  despachoEmail     String?
+  despachoDireccion String?
+  despachoComuna    String?
+  despachoCiudad    String?
+  despachoRegion    String?
+  despachoNotas     String?
+  subtotalNeto      Int
+  iva               Int
+  total             Int
+  estado            EcommerceEstadoPedido @default(CREADO)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  pagos             EcommercePago[]
+  cliente           Cliente?              @relation(fields: [clienteId], references: [id])
+  items             EcommercePedidoItem[]
+
+  @@index([clienteId])
+  @@index([estado])
+}
+
+model EcommercePedidoItem {
+  id                         String          @id @default(cuid())
+  pedidoId                   String
+  productoId                 String
+  descripcionSnapshot        String
+  cantidad                   Int
+  precioUnitarioNetoSnapshot Int
+  subtotalNetoSnapshot       Int
+  ivaPctSnapshot             Int
+  ivaMontoSnapshot           Int
+  totalSnapshot              Int
+  createdAt                  DateTime        @default(now())
+  pedido                     EcommercePedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  producto                   Producto        @relation(fields: [productoId], references: [id])
+
+  @@index([pedidoId])
+  @@index([productoId])
+}
+
+model EcommercePago {
+  id                 String              @id @default(cuid())
+  pedidoId           String
+  metodo             EcommerceMetodoPago
+  estado             EcommerceEstadoPago @default(PENDIENTE)
+  monto              Int
+  referencia         String?
+  evidenciaUrl       String?
+  gatewayPayloadJson Json?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  pedido             EcommercePedido     @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([pedidoId])
+  @@index([estado])
+}
+
+model EcommerceNotificacion {
+  id              String   @id @default(cuid())
+  tipo            String
+  referenciaTabla String
+  referenciaId    String
+  titulo          String
+  detalle         String
+  leido           Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([tipo])
+  @@index([leido])
+  @@index([referenciaTabla])
+  @@index([referenciaId])
+}
+
+model StockAlert {
+  id           String           @id
+  inventarioId String
+  threshold    Int
+  stockAtAlert Int
+  status       StockAlertStatus @default(OPEN)
+  openedAt     DateTime         @default(now())
+  ackAt        DateTime?
+  resolvedAt   DateTime?
+  lastSentAt   DateTime?
+  channel      String?
+  meta         Json?
+  Inventario   Inventario       @relation(fields: [inventarioId], references: [id], onDelete: Cascade)
+
+  @@index([inventarioId, status])
+  @@index([status, openedAt])
+}
+
+model StockCriticalRule {
+  id                String     @id
+  inventarioId      String     @unique
+  enabled           Boolean    @default(true)
+  thresholdOverride Int?
+  cooldownMinutes   Int        @default(360)
+  lastNotifiedAt    DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime
+  Inventario        Inventario @relation(fields: [inventarioId], references: [id], onDelete: Cascade)
+
+  @@index([enabled])
 }
 
 enum ClientStatus {
@@ -200,165 +390,8 @@ enum EcommerceEstadoPago {
   RECHAZADO
 }
 
-model EcommerceCarrito {
-  id        String                 @id @default(cuid())
-  clienteId String?
-  estado    EcommerceEstadoCarrito @default(ACTIVO)
-  createdAt DateTime               @default(now())
-  updatedAt DateTime               @updatedAt
-
-  cliente Cliente?             @relation(fields: [clienteId], references: [id])
-  items   EcommerceCarritoItem[]
-
-  @@index([clienteId])
-  @@index([estado])
-}
-
-model EcommerceCarritoItem {
-  id                        String   @id @default(cuid())
-  carritoId                 String
-  productoId                String
-  cantidad                  Int
-  precioUnitarioNetoSnapshot Int
-  subtotalNetoSnapshot       Int
-  ivaPctSnapshot             Int
-  ivaMontoSnapshot           Int
-  totalSnapshot              Int
-  createdAt                 DateTime @default(now())
-
-  carrito  EcommerceCarrito @relation(fields: [carritoId], references: [id], onDelete: Cascade)
-  producto Producto         @relation(fields: [productoId], references: [id])
-
-  @@unique([carritoId, productoId])
-  @@index([carritoId])
-  @@index([productoId])
-}
-
-model EcommerceCotizacion {
-  id             String                   @id @default(cuid())
-  correlativo    Int                      @default(autoincrement())
-  codigo         String                   @unique
-  origen         String                   @default("ECOMMERCE")
-  clienteId      String?
-  nombreContacto String
-  email          String
-  telefono       String
-  empresa        String?
-  rut            String?
-  observaciones  String?
-  ocCliente      String?
-  subtotalNeto   Int
-  iva            Int
-  total          Int
-  estado         EcommerceEstadoCotizacion @default(NUEVA)
-  createdAt      DateTime                 @default(now())
-  updatedAt      DateTime                 @updatedAt
-
-  cliente Cliente?                 @relation(fields: [clienteId], references: [id])
-  items   EcommerceCotizacionItem[]
-
-  @@index([clienteId])
-  @@index([estado])
-}
-
-model EcommerceCotizacionItem {
-  id                        String   @id @default(cuid())
-  cotizacionId              String
-  productoId                String
-  descripcionSnapshot       String
-  cantidad                  Int
-  precioUnitarioNetoSnapshot Int
-  subtotalNetoSnapshot       Int
-  ivaPctSnapshot             Int
-  ivaMontoSnapshot           Int
-  totalSnapshot              Int
-  createdAt                 DateTime @default(now())
-
-  cotizacion EcommerceCotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
-  producto   Producto            @relation(fields: [productoId], references: [id])
-
-  @@index([cotizacionId])
-  @@index([productoId])
-}
-
-model EcommercePedido {
-  id                  String                @id @default(cuid())
-  correlativo         Int                   @default(autoincrement())
-  codigo              String                @unique
-  clienteId           String?
-  despachoNombre      String?
-  despachoTelefono    String?
-  despachoEmail       String?
-  despachoDireccion   String?
-  despachoComuna      String?
-  despachoCiudad      String?
-  despachoRegion      String?
-  despachoNotas       String?
-  subtotalNeto        Int
-  iva                Int
-  total              Int
-  estado              EcommerceEstadoPedido @default(CREADO)
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-
-  cliente Cliente?            @relation(fields: [clienteId], references: [id])
-  items   EcommercePedidoItem[]
-  pagos   EcommercePago[]
-
-  @@index([clienteId])
-  @@index([estado])
-}
-
-model EcommercePedidoItem {
-  id                        String   @id @default(cuid())
-  pedidoId                  String
-  productoId                String
-  descripcionSnapshot       String
-  cantidad                  Int
-  precioUnitarioNetoSnapshot Int
-  subtotalNetoSnapshot       Int
-  ivaPctSnapshot             Int
-  ivaMontoSnapshot           Int
-  totalSnapshot              Int
-  createdAt                 DateTime @default(now())
-
-  pedido   EcommercePedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-  producto Producto        @relation(fields: [productoId], references: [id])
-
-  @@index([pedidoId])
-  @@index([productoId])
-}
-
-model EcommercePago {
-  id                String              @id @default(cuid())
-  pedidoId          String
-  metodo            EcommerceMetodoPago
-  estado            EcommerceEstadoPago @default(PENDIENTE)
-  monto             Int
-  referencia        String?
-  evidenciaUrl      String?
-  gatewayPayloadJson Json?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-
-  pedido EcommercePedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-
-  @@index([pedidoId])
-  @@index([estado])
-}
-
-model EcommerceNotificacion {
-  id              String   @id @default(cuid())
-  tipo            String
-  referenciaTabla String
-  referenciaId    String
-  titulo          String
-  detalle         String
-  leido           Boolean  @default(false)
-  createdAt       DateTime @default(now())
-
-  @@index([tipo])
-  @@index([leido])
-  @@index([referenciaTabla])
-  @@index([referenciaId])
+enum StockAlertStatus {
+  OPEN
+  ACK
+  RESOLVED
 }

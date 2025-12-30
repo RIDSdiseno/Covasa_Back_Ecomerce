@@ -1,4 +1,9 @@
-import { Prisma, PrismaClient } from "@prisma/client";
+import {
+  EcommerceEstadoCarrito,
+  EcommerceEstadoPedido,
+  Prisma,
+  PrismaClient,
+} from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
@@ -13,7 +18,17 @@ export const buscarProductosPorIds = (ids: string[], tx?: DbClient) =>
 export const buscarClientePorId = (id: string, tx?: DbClient) =>
   db(tx).cliente.findUnique({
     where: { id },
-    select: { id: true },
+    select: {
+      id: true,
+      nombre: true,
+      personaContacto: true,
+      email: true,
+      telefono: true,
+      direccion: true,
+      comuna: true,
+      ciudad: true,
+      region: true,
+    },
   });
 
 export const crearPedido = (data: Prisma.EcommercePedidoCreateInput, tx?: DbClient) =>
@@ -46,8 +61,34 @@ export const actualizarCodigoPedido = (id: string, codigo: string, tx?: DbClient
     },
   });
 
+export const actualizarEstadoPedido = (
+  id: string,
+  estado: EcommerceEstadoPedido,
+  tx?: DbClient
+) =>
+  db(tx).ecommercePedido.update({
+    where: { id },
+    data: { estado },
+  });
+
 export const obtenerPedidoPorId = (id: string) =>
   prisma.ecommercePedido.findUnique({
     where: { id },
     include: { items: true, pagos: true },
+  });
+
+export const obtenerCarritoPorId = (id: string, tx?: DbClient) =>
+  db(tx).ecommerceCarrito.findUnique({
+    where: { id },
+    include: { items: true },
+  });
+
+export const actualizarCarritoEstado = (
+  id: string,
+  estado: EcommerceEstadoCarrito,
+  tx?: DbClient
+) =>
+  db(tx).ecommerceCarrito.update({
+    where: { id },
+    data: { estado },
   });

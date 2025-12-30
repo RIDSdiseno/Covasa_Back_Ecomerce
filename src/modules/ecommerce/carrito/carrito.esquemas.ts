@@ -8,7 +8,16 @@ export const carritoIdSchema = z.object({
   id: z.string().min(1),
 });
 
-export const carritoItemSchema = z.object({
+export const carritoItemAgregarSchema = z.object({
   productoId: z.string().min(1),
   cantidad: z.number().int().positive(),
+});
+
+export const carritoItemActualizarSchema = z.object({
+  cantidad: z.number().int().positive(),
+});
+
+export const carritoItemParamSchema = z.object({
+  id: z.string().min(1),
+  itemId: z.string().min(1),
 });

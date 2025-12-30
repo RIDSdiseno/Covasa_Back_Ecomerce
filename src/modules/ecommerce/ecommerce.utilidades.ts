@@ -2,6 +2,12 @@ import { ErrorApi } from "../../lib/errores";
 
 type ItemCantidad = { productoId: string; cantidad: number };
 
+type ItemTotales = {
+  subtotalNetoSnapshot: number;
+  ivaMontoSnapshot: number;
+  totalSnapshot: number;
+};
+
 export const obtenerIvaPct = () => {
   const valor = Number(process.env.IVA_PCT ?? 19);
   if (!Number.isFinite(valor) || valor <= 0 || valor > 100) {
@@ -27,3 +33,46 @@ export const agruparItems = (items: ItemCantidad[]) => {
 };
 
 export const normalizarTexto = (valor?: string) => (valor ?? "").trim();
+
+export const calcularTotales = (items: ItemTotales[]) => {
+  const acumulado = items.reduce(
+    (acc, item) => {
+      acc.subtotalNeto += item.subtotalNetoSnapshot;
+      acc.iva += item.ivaMontoSnapshot;
+      acc.total += item.totalSnapshot;
+      return acc;
+    },
+    { subtotalNeto: 0, iva: 0, total: 0 }
+  );
+
+  return acumulado;
+};
+
+export const construirObservaciones = (datos: {
+  observaciones?: string;
+  tipoObra?: string;
+  comunaRegion?: string;
+  detalleAdicional?: string;
+  ubicacion?: string;
+}) => {
+  const observaciones = normalizarTexto(datos.observaciones);
+  const tipoObra = normalizarTexto(datos.tipoObra);
+  const comunaRegion = normalizarTexto(datos.comunaRegion);
+  const detalleAdicional = normalizarTexto(datos.detalleAdicional);
+  const ubicacion = normalizarTexto(datos.ubicacion);
+
+  const payload: Record<string, string> = {};
+
+  if (observaciones) payload.observaciones = observaciones;
+  if (tipoObra) payload.tipoObra = tipoObra;
+  if (comunaRegion) payload.comunaRegion = comunaRegion;
+  if (detalleAdicional) payload.detalleAdicional = detalleAdicional;
+  if (ubicacion) payload.ubicacion = ubicacion;
+
+  const tieneDatos = Object.keys(payload).length > 0;
+  if (!tieneDatos) {
+    return undefined;
+  }
+
+  return JSON.stringify(payload);
+};

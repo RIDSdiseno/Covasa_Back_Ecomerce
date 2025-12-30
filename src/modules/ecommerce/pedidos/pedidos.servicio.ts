@@ -1,30 +1,94 @@
 import { randomUUID } from "crypto";
+import { EcommerceEstadoCarrito, EcommerceEstadoPedido } from "@prisma/client";
 import { ErrorApi } from "../../../lib/errores";
 import { prisma } from "../../../lib/prisma";
-import { agruparItems, formatearCodigo, normalizarTexto, obtenerIvaPct } from "../ecommerce.utilidades";
+import { agruparItems, calcularTotales, formatearCodigo, normalizarTexto, obtenerIvaPct } from "../ecommerce.utilidades";
 import { registrarNotificacion } from "../notificaciones/notificaciones.servicio";
 import {
+  actualizarCarritoEstado,
   actualizarCodigoPedido,
+  actualizarEstadoPedido,
   buscarClientePorId,
   buscarProductosPorIds,
   crearPedido,
+  obtenerCarritoPorId,
   obtenerPedidoPorId,
 } from "./pedidos.repositorio";
 
 type ItemSolicitud = { productoId: string; cantidad: number };
 
+type DespachoPayload = {
+  nombre?: string;
+  telefono?: string;
+  email?: string;
+  direccion?: string;
+  comuna?: string;
+  ciudad?: string;
+  region?: string;
+  notas?: string;
+};
+
+type ClienteDespacho = {
+  id: string;
+  nombre: string;
+  personaContacto: string | null;
+  email: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  comuna: string | null;
+  ciudad: string | null;
+  region: string | null;
+};
+
+const validarStockConfigurado = () => process.env.ECOMMERCE_VALIDAR_STOCK === "true";
+
+const normalizarNullable = (valor?: string | null) => normalizarTexto(valor ?? undefined);
+
+const validarStockDisponible = async (items: ItemSolicitud[]) => {
+  if (!validarStockConfigurado()) {
+    return;
+  }
+
+  const ids = items.map((item) => item.productoId);
+  const stockRows = await prisma.inventario.groupBy({
+    by: ["productoId"],
+    where: { productoId: { in: ids } },
+    _sum: { stock: true },
+  });
+
+  const stockPorId = new Map(stockRows.map((row) => [row.productoId, row._sum.stock ?? 0]));
+  const sinStock = items.filter((item) => (stockPorId.get(item.productoId) ?? 0) < item.cantidad);
+
+  if (sinStock.length > 0) {
+    throw new ErrorApi("Stock insuficiente", 409, {
+      productos: sinStock.map((item) => ({
+        productoId: item.productoId,
+        solicitado: item.cantidad,
+        disponible: stockPorId.get(item.productoId) ?? 0,
+      })),
+    });
+  }
+};
+
+const resolverDespacho = (despacho?: DespachoPayload, cliente?: ClienteDespacho | null) => {
+  const nombreCliente = normalizarNullable(cliente?.personaContacto) || normalizarNullable(cliente?.nombre);
+
+  return {
+    nombre: normalizarTexto(despacho?.nombre) || nombreCliente || undefined,
+    telefono: normalizarTexto(despacho?.telefono) || normalizarNullable(cliente?.telefono) || undefined,
+    email: normalizarTexto(despacho?.email) || normalizarNullable(cliente?.email) || undefined,
+    direccion: normalizarTexto(despacho?.direccion) || normalizarNullable(cliente?.direccion) || undefined,
+    comuna: normalizarTexto(despacho?.comuna) || normalizarNullable(cliente?.comuna) || undefined,
+    ciudad: normalizarTexto(despacho?.ciudad) || normalizarNullable(cliente?.ciudad) || undefined,
+    region: normalizarTexto(despacho?.region) || normalizarNullable(cliente?.region) || undefined,
+    notas: normalizarTexto(despacho?.notas) || undefined,
+  };
+};
+
+// Crea pedido desde items directos, calcula snapshots y notifica.
 export const crearPedidoServicio = async (payload: {
   clienteId?: string;
-  despacho?: {
-    nombre?: string;
-    telefono?: string;
-    email?: string;
-    direccion?: string;
-    comuna?: string;
-    ciudad?: string;
-    region?: string;
-    notas?: string;
-  };
+  despacho?: DespachoPayload;
   items: ItemSolicitud[];
 }) => {
   const ivaPct = obtenerIvaPct();
@@ -38,12 +102,16 @@ export const crearPedidoServicio = async (payload: {
     throw new ErrorApi("Productos no encontrados", 404, { productos: faltantes });
   }
 
+  let cliente: ClienteDespacho | null = null;
   if (payload.clienteId) {
-    const cliente = await buscarClientePorId(payload.clienteId);
-    if (!cliente) {
+    const encontrado = await buscarClientePorId(payload.clienteId);
+    if (!encontrado) {
       throw new ErrorApi("Cliente no encontrado", 404, { id: payload.clienteId });
     }
+    cliente = encontrado as ClienteDespacho;
   }
+
+  await validarStockDisponible(itemsAgrupados);
 
   let subtotalNeto = 0;
   let ivaTotal = 0;
@@ -75,20 +143,21 @@ export const crearPedidoServicio = async (payload: {
 
   const total = subtotalNeto + ivaTotal;
   const codigoTemporal = `ECP-TMP-${randomUUID()}`;
+  const despachoFinal = resolverDespacho(payload.despacho, cliente);
 
   const resultado = await prisma.$transaction(async (tx) => {
     const creado = await crearPedido(
       {
         codigo: codigoTemporal,
         cliente: payload.clienteId ? { connect: { id: payload.clienteId } } : undefined,
-        despachoNombre: normalizarTexto(payload.despacho?.nombre) || undefined,
-        despachoTelefono: normalizarTexto(payload.despacho?.telefono) || undefined,
-        despachoEmail: normalizarTexto(payload.despacho?.email) || undefined,
-        despachoDireccion: normalizarTexto(payload.despacho?.direccion) || undefined,
-        despachoComuna: normalizarTexto(payload.despacho?.comuna) || undefined,
-        despachoCiudad: normalizarTexto(payload.despacho?.ciudad) || undefined,
-        despachoRegion: normalizarTexto(payload.despacho?.region) || undefined,
-        despachoNotas: normalizarTexto(payload.despacho?.notas) || undefined,
+        despachoNombre: despachoFinal.nombre,
+        despachoTelefono: despachoFinal.telefono,
+        despachoEmail: despachoFinal.email,
+        despachoDireccion: despachoFinal.direccion,
+        despachoComuna: despachoFinal.comuna,
+        despachoCiudad: despachoFinal.ciudad,
+        despachoRegion: despachoFinal.region,
+        despachoNotas: despachoFinal.notas,
         subtotalNeto,
         iva: ivaTotal,
         total,
@@ -115,10 +184,109 @@ export const crearPedidoServicio = async (payload: {
   return resultado;
 };
 
+// Crea pedido desde un carrito existente y marca el carrito como CONVERTIDO.
+export const crearPedidoDesdeCarritoServicio = async (
+  cartId: string,
+  despacho?: DespachoPayload
+) => {
+  const carrito = await obtenerCarritoPorId(cartId);
+  if (!carrito) {
+    throw new ErrorApi("Carrito no encontrado", 404, { id: cartId });
+  }
+
+  if (carrito.items.length === 0) {
+    throw new ErrorApi("Carrito sin items", 400, { id: cartId });
+  }
+
+  const itemsSolicitud = carrito.items.map((item) => ({
+    productoId: item.productoId,
+    cantidad: item.cantidad,
+  }));
+
+  await validarStockDisponible(itemsSolicitud);
+
+  const productos = await buscarProductosPorIds(itemsSolicitud.map((item) => item.productoId));
+  const productosPorId = new Map(productos.map((producto) => [producto.id, producto]));
+
+  const itemsCrear = carrito.items.map((item) => {
+    const producto = productosPorId.get(item.productoId);
+    if (!producto) {
+      throw new ErrorApi("Producto no encontrado", 404, { id: item.productoId });
+    }
+
+    return {
+      producto: { connect: { id: item.productoId } },
+      descripcionSnapshot: producto.nombre,
+      cantidad: item.cantidad,
+      precioUnitarioNetoSnapshot: item.precioUnitarioNetoSnapshot,
+      subtotalNetoSnapshot: item.subtotalNetoSnapshot,
+      ivaPctSnapshot: item.ivaPctSnapshot,
+      ivaMontoSnapshot: item.ivaMontoSnapshot,
+      totalSnapshot: item.totalSnapshot,
+    };
+  });
+
+  const totales = calcularTotales(carrito.items);
+  const codigoTemporal = `ECP-TMP-${randomUUID()}`;
+  const cliente = carrito.clienteId ? ((await buscarClientePorId(carrito.clienteId)) as ClienteDespacho | null) : null;
+  const despachoFinal = resolverDespacho(despacho, cliente);
+
+  const resultado = await prisma.$transaction(async (tx) => {
+    const creado = await crearPedido(
+      {
+        codigo: codigoTemporal,
+        cliente: carrito.clienteId ? { connect: { id: carrito.clienteId } } : undefined,
+        despachoNombre: despachoFinal.nombre,
+        despachoTelefono: despachoFinal.telefono,
+        despachoEmail: despachoFinal.email,
+        despachoDireccion: despachoFinal.direccion,
+        despachoComuna: despachoFinal.comuna,
+        despachoCiudad: despachoFinal.ciudad,
+        despachoRegion: despachoFinal.region,
+        despachoNotas: despachoFinal.notas,
+        subtotalNeto: totales.subtotalNeto,
+        iva: totales.iva,
+        total: totales.total,
+        items: { create: itemsCrear },
+      },
+      tx
+    );
+
+    const codigoFinal = formatearCodigo("ECP", creado.correlativo);
+    const actualizado = await actualizarCodigoPedido(creado.id, codigoFinal, tx);
+
+    await actualizarCarritoEstado(cartId, EcommerceEstadoCarrito.CONVERTIDO, tx);
+
+    await registrarNotificacion({
+      tipo: "NUEVO_PEDIDO",
+      referenciaTabla: "EcommercePedido",
+      referenciaId: creado.id,
+      titulo: "Nuevo pedido ecommerce",
+      detalle: `Pedido desde carrito ${cartId}. Total ${totales.total}.`,
+      tx,
+    });
+
+    return actualizado;
+  });
+
+  return resultado;
+};
+
+// Obtiene pedido con items y pagos.
 export const obtenerPedidoServicio = async (id: string) => {
   const pedido = await obtenerPedidoPorId(id);
   if (!pedido) {
     throw new ErrorApi("Pedido no encontrado", 404, { id });
   }
   return pedido;
+};
+
+// Actualiza estado de un pedido (uso interno con pagos).
+export const actualizarEstadoPedidoServicio = async (id: string, estado: EcommerceEstadoPedido) => {
+  const pedido = await obtenerPedidoPorId(id);
+  if (!pedido) {
+    throw new ErrorApi("Pedido no encontrado", 404, { id });
+  }
+  await actualizarEstadoPedido(id, estado);
+  return { id, estado };
 };

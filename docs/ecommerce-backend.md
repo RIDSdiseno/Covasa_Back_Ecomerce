@@ -1,193 +1,105 @@
-# Ecommerce backend - flujo end-to-end
+# Backend ecommerce COVASA
 
-## Resumen
-- Backend Node/Express/Prisma con tablas Ecommerce*.
-- No se modifican tablas maestras CRM (Cliente, Producto, Inventario, etc).
-- El formulario de cotizacion guarda tipoObra/comunaRegion/detalleAdicional en EcommerceCotizacion.observaciones como JSON string.
+## Variables de entorno relevantes
+- `DATABASE_URL`: conexion PostgreSQL.
+- `IVA_PCT`: porcentaje IVA (default 19).
+- `ECOMMERCE_VALIDAR_STOCK`: `true` para validar stock al crear pedido.
+- `CORS_ALLOW_ALL`: `true` para permitir todos los origenes.
+- `ALLOWED_ORIGINS`: lista separada por comas.
 
-## Base URL y CORS
-- Backend local: `http://localhost:3000/api`.
-- Front usa `VITE_API_URL` en `Covasa_ecommer_front-dev/covasa_web_front/src/services/api.ts`.
-- CORS permite por defecto `http://localhost:5173` y `http://localhost:3000`.
-- Para agregar dominios: `ALLOWED_ORIGINS=dominio1,dominio2` o `CORS_ALLOW_ALL=true`.
+### Transbank (Webpay Plus)
+- `TRANSBANK_ENV`: `integration` | `production`.
+- `TRANSBANK_COMMERCE_CODE`: requerido en produccion.
+- `TRANSBANK_API_KEY`: requerido en produccion.
+- `TRANSBANK_RETURN_URL`: URL backend que recibe el `token_ws`.
+- `ECOMMERCE_FRONT_URL`: URL base del frontend (default `http://localhost:5173`).
 
-## Variables .env relevantes
-- `PORT=3000`
-- `DATABASE_URL=...`
-- `IVA_PCT=19` (por defecto)
-- `ECOMMERCE_VALIDAR_STOCK=true` (opcional, valida stock Inventario antes de crear pedido)
-- `ALLOWED_ORIGINS=...`
-
-## Reglas de negocio (snapshots y totales)
-- `precioUnitarioNetoSnapshot` = `Producto.precioConDescto` si > 0, si no `Producto.precioGeneral`.
-- `subtotalNetoSnapshot` = `precioUnitarioNetoSnapshot * cantidad`.
-- `ivaPctSnapshot` = IVA (default 19%).
-- `ivaMontoSnapshot` = round(`subtotalNetoSnapshot * ivaPctSnapshot / 100`).
-- `totalSnapshot` = `subtotalNetoSnapshot + ivaMontoSnapshot`.
-- Totales de carrito/cotizacion/pedido = suma de items.
-- Carrito respeta `@@unique([carritoId, productoId])` y hace UPSERT + merge de cantidades.
+### Mercado Pago
+- `MERCADOPAGO_ACCESS_TOKEN`: token privado para crear preferencias.
 
 ## Endpoints principales
 
-### Salud
-- GET `/api/health`
-
 ### Productos
-- GET `/api/products` (alias de `/api/productos`)
-  - Retorna campos base + precios calculados y stock.
+- `GET /api/productos` (legacy)
+- `GET /api/ecommerce/productos`
 
-### Cotizaciones (formulario)
-- POST `/api/ecommerce/quotes`
-  - Body:
-    ```json
-    {
-      "nombreContacto": "Juan Perez",
-      "empresa": "Constructora X",
-      "email": "jp@x.cl",
-      "telefono": "+56 9 1234 5678",
-      "tipoObra": "obra-gruesa",
-      "comunaRegion": "Santiago, RM",
-      "ocCliente": "OC-123",
-      "detalleAdicional": "Entrega urgente",
-      "items": [{"productoId": "...", "cantidad": 3}]
-    }
-    ```
-  - Respuesta:
-    ```json
-    {"ok": true, "data": {"cotizacionId": "...", "codigo": "ECQ-000001", "total": 12345}}
-    ```
+### Clientes (solo lectura)
+- `GET /api/ecommerce/clientes/:id`
 
-- GET `/api/ecommerce/quotes/:id`
-
-- POST `/api/ecommerce/quotes/:id/convert-to-cart`
-  - Convierte cotizacion a carrito ACTIVO y crea notificacion.
+### Cotizaciones
+- `POST /api/cotizaciones` (legacy)
+- `POST /api/ecommerce/quotes`
+- `GET /api/ecommerce/quotes/:id`
+- `POST /api/ecommerce/quotes/:id/convert-to-cart`
 
 ### Carrito
-- POST `/api/ecommerce/cart`
-  - Body opcional: `{ "clienteId": "..." }`.
+- `POST /api/ecommerce/cart`
+- `GET /api/ecommerce/cart/:id`
+- `POST /api/ecommerce/cart/:id/items`
+- `PATCH /api/ecommerce/cart/:id/items/:itemId`
+- `DELETE /api/ecommerce/cart/:id/items/:itemId`
+- `DELETE /api/ecommerce/cart/:id/items`
 
-- GET `/api/ecommerce/cart/:id`
-- POST `/api/ecommerce/cart/:id/items`
-  - Body: `{ "productoId": "...", "cantidad": 2 }`.
-- PATCH `/api/ecommerce/cart/:id/items/:itemId`
-  - Body: `{ "cantidad": 5 }`.
-- DELETE `/api/ecommerce/cart/:id/items/:itemId`
-- DELETE `/api/ecommerce/cart/:id/items`
+### Pedidos
+- `POST /api/ecommerce/orders/from-cart/:cartId`
+- `GET /api/ecommerce/orders/:id`
 
-### Pedidos (checkout)
-- POST `/api/ecommerce/orders/from-cart/:cartId`
-  - Body despacho opcional:
-    ```json
-    {
-      "despacho": {
-        "nombre": "Juan",
-        "telefono": "+56 9 1234 5678",
-        "email": "jp@x.cl",
-        "direccion": "Av. 123",
-        "comuna": "Santiago",
-        "ciudad": "Santiago",
-        "region": "RM",
-        "notas": "Llamar antes"
-      }
-    }
-    ```
-  - Respuesta: `{ "pedidoId": "...", "codigo": "ECP-000001", "total": 12345 }`.
+### Pagos (placeholder)
+- `POST /api/ecommerce/payments`
+- `PATCH /api/ecommerce/payments/:id/confirm`
+- `PATCH /api/ecommerce/payments/:id/reject`
 
-- GET `/api/ecommerce/orders/:id`
+### Pagos Transbank
+- `POST /api/ecommerce/payments/transbank`
+- `POST /api/ecommerce/payments/transbank/return`
+- `POST /api/ecommerce/payments/transbank/commit`
+- `GET /api/ecommerce/payments/transbank/status/:token`
 
-### Pagos
-- POST `/api/ecommerce/payments`
-  - Body:
-    ```json
-    {
-      "pedidoId": "...",
-      "metodo": "TRANSBANK",
-      "monto": 12345,
-      "referencia": "trx-123",
-      "evidenciaUrl": "https://...",
-      "gatewayPayloadJson": {"raw": true}
-    }
-    ```
-  - Crea EcommercePago con estado PENDIENTE.
+### Pagos Mercado Pago
+- `POST /api/ecommerce/payments/mercadopago`
 
-- PATCH `/api/ecommerce/payments/:id/confirm`
-- PATCH `/api/ecommerce/payments/:id/reject`
+## Flujo Transbank (backend)
+1) Crear pedido (por ejemplo desde carrito).
+2) Iniciar pago Transbank:
+   - `POST /api/ecommerce/payments/transbank` con `{ pedidoId, returnUrl? }`.
+   - Respuesta incluye `{ token, url, redirectUrl }`.
+3) Redirigir al usuario a `redirectUrl`.
+4) Transbank redirige a `TRANSBANK_RETURN_URL` con `token_ws`.
+5) El backend redirige al front `/pago/transbank?token_ws=...`.
+6) El front confirma llamando `/api/ecommerce/payments/transbank/commit`.
+
+## Flujo Mercado Pago (backend)
+1) Crear pedido (por ejemplo desde carrito).
+2) Iniciar pago Mercado Pago:
+   - `POST /api/ecommerce/payments/mercadopago` con `{ pedidoId }`.
+   - Respuesta incluye `{ preferenceId, redirectUrl }`.
+3) Redirigir al usuario a `redirectUrl`.
+4) Mercado Pago devuelve al front `/pago/mercadopago?status=...`.
 
 ## Ejemplos cURL
 
-### Productos
-```
-curl -s http://localhost:3000/api/products
-```
-
-### Crear cotizacion (quotes)
-```
-curl -s -X POST http://localhost:3000/api/ecommerce/quotes \
+### Iniciar pago Transbank
+```bash
+curl -X POST "http://localhost:3000/api/ecommerce/payments/transbank" \
   -H "Content-Type: application/json" \
-  -d '{
-    "nombreContacto": "Juan Perez",
-    "email": "juan@demo.cl",
-    "telefono": "+56 9 1111 2222",
-    "tipoObra": "obra-gruesa",
-    "comunaRegion": "Santiago, RM",
-    "items": [{"productoId": "PROD_ID", "cantidad": 2}]
-  }'
+  -d '{"pedidoId":"PEDIDO_ID"}'
 ```
 
-### Convertir cotizacion a carrito
-```
-curl -s -X POST http://localhost:3000/api/ecommerce/quotes/COT_ID/convert-to-cart
-```
-
-### Crear carrito
-```
-curl -s -X POST http://localhost:3000/api/ecommerce/cart \
+### Confirmar pago Transbank
+```bash
+curl -X POST "http://localhost:3000/api/ecommerce/payments/transbank/commit" \
   -H "Content-Type: application/json" \
-  -d '{}'
+  -d '{"token":"TOKEN_WS"}'
 ```
 
-### Agregar item al carrito
+### Estado Transbank
+```bash
+curl -X GET "http://localhost:3000/api/ecommerce/payments/transbank/status/TOKEN_WS"
 ```
-curl -s -X POST http://localhost:3000/api/ecommerce/cart/CAR_ID/items \
+
+### Iniciar pago Mercado Pago
+```bash
+curl -X POST "http://localhost:3000/api/ecommerce/payments/mercadopago" \
   -H "Content-Type: application/json" \
-  -d '{"productoId": "PROD_ID", "cantidad": 1}'
+  -d '{"pedidoId":"PEDIDO_ID"}'
 ```
-
-### Checkout desde carrito
-```
-curl -s -X POST http://localhost:3000/api/ecommerce/orders/from-cart/CAR_ID \
-  -H "Content-Type: application/json" \
-  -d '{"despacho": {"nombre": "Juan"}}'
-```
-
-### Crear pago pendiente
-```
-curl -s -X POST http://localhost:3000/api/ecommerce/payments \
-  -H "Content-Type: application/json" \
-  -d '{"pedidoId": "PED_ID", "metodo": "TRANSBANK", "monto": 12345}'
-```
-
-### Confirmar pago
-```
-curl -s -X PATCH http://localhost:3000/api/ecommerce/payments/PAGO_ID/confirm
-```
-
-### Rechazar pago
-```
-curl -s -X PATCH http://localhost:3000/api/ecommerce/payments/PAGO_ID/reject
-```
-
-## Checklist end-to-end (obligatorio)
-- [ ] GET /api/health
-- [ ] GET /api/products (ver stock y precios)
-- [ ] POST /api/ecommerce/cart (crear carrito)
-- [ ] POST /api/ecommerce/cart/:id/items (upsert + merge)
-- [ ] PATCH /api/ecommerce/cart/:id/items/:itemId (actualizar cantidad)
-- [ ] DELETE /api/ecommerce/cart/:id/items/:itemId (eliminar item)
-- [ ] POST /api/ecommerce/quotes (crear cotizacion)
-- [ ] POST /api/ecommerce/quotes/:id/convert-to-cart
-- [ ] POST /api/ecommerce/orders/from-cart/:cartId
-- [ ] POST /api/ecommerce/payments
-- [ ] PATCH /api/ecommerce/payments/:id/confirm
-- [ ] PATCH /api/ecommerce/payments/:id/reject
-- [ ] Validar registros en DB con Prisma Studio

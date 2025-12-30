@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient, EcommerceEstadoCotizacion } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
@@ -18,10 +18,7 @@ export const buscarClientePorId = (id: string, tx?: DbClient) =>
     select: { id: true },
   });
 
-export const crearCotizacion = (
-  data: Prisma.EcommerceCotizacionCreateInput,
-  tx?: DbClient
-) =>
+export const crearCotizacion = (data: Prisma.EcommerceCotizacionCreateInput, tx?: DbClient) =>
   db(tx).ecommerceCotizacion.create({
     data,
     select: {
@@ -36,11 +33,7 @@ export const crearCotizacion = (
     },
   });
 
-export const actualizarCodigoCotizacion = (
-  id: string,
-  codigo: string,
-  tx?: DbClient
-) =>
+export const actualizarCodigoCotizacion = (id: string, codigo: string, tx?: DbClient) =>
   db(tx).ecommerceCotizacion.update({
     where: { id },
     data: { codigo },
@@ -55,10 +48,26 @@ export const actualizarCodigoCotizacion = (
     },
   });
 
+export const actualizarEstadoCotizacion = (
+  id: string,
+  estado: EcommerceEstadoCotizacion,
+  tx?: DbClient
+) =>
+  db(tx).ecommerceCotizacion.update({
+    where: { id },
+    data: { estado },
+  });
+
 export const obtenerCotizacionPorId = (id: string) =>
   prisma.ecommerceCotizacion.findUnique({
     where: { id },
     include: {
       items: true,
     },
+  });
+
+export const obtenerCotizacionConItems = (id: string, tx?: DbClient) =>
+  db(tx).ecommerceCotizacion.findUnique({
+    where: { id },
+    include: { items: true },
   });
