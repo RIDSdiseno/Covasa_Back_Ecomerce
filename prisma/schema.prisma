@@ -85,8 +85,9 @@ model Inventario {
   StockMovimiento   StockMovimiento[]
 
   @@index([productoId])
+  @@index([minimo])
+  @@index([stock])
 }
-
 
 model PrecioProveedor {
   id          String    @id
@@ -122,6 +123,7 @@ model Producto {
   ecommercePedidoItems     EcommercePedidoItem[]
   Inventario               Inventario[]
   PrecioProveedor          PrecioProveedor[]
+  ProductoImagen           ProductoImagen[]
 
   @@index([nombre])
   @@index([tipo])
@@ -151,6 +153,8 @@ model StockMovimiento {
   Inventario   Inventario          @relation(fields: [inventarioId], references: [id], onDelete: Cascade)
 
   @@index([inventarioId])
+  @@index([createdAt])
+  @@index([tipo])
 }
 
 model EcommerceCarrito {
@@ -251,8 +255,8 @@ model EcommercePedido {
   updatedAt         DateTime              @updatedAt
   pagos             EcommercePago[]
   cliente           Cliente?              @relation(fields: [clienteId], references: [id])
-  direccion         EcommerceDireccion?   @relation("PedidoDireccion")
   items             EcommercePedidoItem[]
+  direccion         EcommerceDireccion?
 
   @@index([clienteId])
   @@index([estado])
@@ -294,6 +298,43 @@ model EcommercePago {
   @@index([estado])
 }
 
+model EcommerceUsuario {
+  id           String               @id @default(cuid())
+  nombre       String
+  email        String               @unique
+  telefono     String?
+  passwordHash String
+  clienteId    String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  cliente      Cliente?             @relation(fields: [clienteId], references: [id])
+  direcciones  EcommerceDireccion[]
+
+  @@index([clienteId])
+}
+
+model EcommerceDireccion {
+  id             String            @id @default(cuid())
+  usuarioId      String?
+  pedidoId       String?           @unique
+  nombreContacto String
+  telefono       String
+  email          String
+  direccion      String
+  comuna         String
+  ciudad         String?
+  region         String
+  notas          String?
+  esPrincipal    Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  usuario        EcommerceUsuario? @relation(fields: [usuarioId], references: [id])
+  pedido         EcommercePedido?  @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([usuarioId, esPrincipal])
+}
+
 model EcommerceNotificacion {
   id              String   @id @default(cuid())
   tipo            String
@@ -310,45 +351,6 @@ model EcommerceNotificacion {
   @@index([referenciaId])
 }
 
-
-
-model EcommerceUsuario {
-  id           String               @id @default(cuid())
-  nombre       String
-  email        String               @unique
-  telefono     String?
-  passwordHash String
-  clienteId    String?
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  cliente      Cliente?             @relation(fields: [clienteId], references: [id], onDelete: SetNull)
-  direcciones  EcommerceDireccion[]
-
-  @@index([clienteId])
-}
-
-model EcommerceDireccion {
-  id             String            @id @default(cuid())
-  usuarioId      String?
-  pedidoId       String?
-  nombreContacto String
-  telefono       String
-  email          String
-  direccion      String
-  comuna         String
-  ciudad         String?
-  region         String
-  notas          String?
-  esPrincipal    Boolean           @default(false)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  usuario        EcommerceUsuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
-  pedido         EcommercePedido?  @relation("PedidoDireccion", fields: [pedidoId], references: [id], onDelete: Cascade)
-
-  @@unique([pedidoId])
-  @@index([usuarioId])
-  @@index([usuarioId, esPrincipal])
-}
 model StockAlert {
   id           String           @id
   inventarioId String
@@ -361,10 +363,13 @@ model StockAlert {
   lastSentAt   DateTime?
   channel      String?
   meta         Json?
+  isActive     Boolean          @default(true)
   Inventario   Inventario       @relation(fields: [inventarioId], references: [id], onDelete: Cascade)
 
+  @@unique([inventarioId, isActive])
   @@index([inventarioId, status])
   @@index([status, openedAt])
+  @@index([inventarioId, isActive])
 }
 
 model StockCriticalRule {
@@ -379,6 +384,21 @@ model StockCriticalRule {
   Inventario        Inventario @relation(fields: [inventarioId], references: [id], onDelete: Cascade)
 
   @@index([enabled])
+  @@index([inventarioId])
+}
+
+model ProductoImagen {
+  id         String   @id
+  productoId String
+  url        String
+  publicId   String
+  orden      Int      @default(0)
+  createdAt  DateTime @default(now())
+  Producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@unique([productoId, publicId])
+  @@index([productoId])
+  @@index([publicId])
 }
 
 enum ClientStatus {

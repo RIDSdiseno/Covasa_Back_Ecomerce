@@ -14,3 +14,8 @@ dist/
 node_modules/
 **/node_modules/
 >>>>>>> e8741ed (actualizacion de dependencias y archivos de configuracion)
+
+dist/
+node_modules/
+.env
+
