@@ -93,3 +93,38 @@ export const actualizarPedidoEstado = (
     where: { id },
     data: { estado },
   });
+
+
+export const obtenerPagoParaRecibo = (id: string, tx?: DbClient) =>
+  db(tx).ecommercePago.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      metodo: true,
+      estado: true,
+      monto: true,
+      createdAt: true,
+      gatewayPayloadJson: true,
+      pedido: {
+        select: {
+          id: true,
+          codigo: true,
+          total: true,
+          estado: true,
+          createdAt: true,
+          direccion: {
+            select: {
+              nombreContacto: true,
+              telefono: true,
+              email: true,
+              direccion: true,
+              comuna: true,
+              ciudad: true,
+              region: true,
+              notas: true,
+            },
+          },
+        },
+      },
+    },
+  });

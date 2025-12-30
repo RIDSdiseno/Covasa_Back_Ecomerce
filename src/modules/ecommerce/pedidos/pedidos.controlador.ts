@@ -34,7 +34,7 @@ export const crearPedido = manejarAsync(async (req: Request, res: Response) => {
 export const crearPedidoDesdeCarrito = manejarAsync(async (req: Request, res: Response) => {
   const { cartId } = pedidoCarritoIdSchema.parse(req.params);
   const payload = pedidoDesdeCarritoSchema.parse(req.body ?? {});
-  const pedido = await crearPedidoDesdeCarritoServicio(cartId, payload.despacho);
+  const pedido = await crearPedidoDesdeCarritoServicio(cartId, payload.despacho, payload.usuarioId);
 
   res.status(201).json({
     ok: true,

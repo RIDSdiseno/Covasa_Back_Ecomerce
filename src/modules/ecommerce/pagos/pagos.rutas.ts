@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { confirmarPago, crearPago, rechazarPago } from "./pagos.controlador";
+import { confirmarPago, crearPago, rechazarPago, obtenerPagoRecibo } from "./pagos.controlador";
 import {
   confirmarTransbankPago,
   crearTransbankPago,
@@ -13,6 +13,7 @@ const router = Router();
 router.post("/", crearPago);
 router.post("/mercadopago", crearMercadoPago);
 router.post("/transbank", crearTransbankPago);
+router.get("/:id", obtenerPagoRecibo);
 router.post("/transbank/return", recibirRetornoTransbank);
 router.get("/transbank/return", recibirRetornoTransbank);
 router.post("/transbank/commit", confirmarTransbankPago);

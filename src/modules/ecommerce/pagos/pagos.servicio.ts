@@ -9,6 +9,7 @@ import {
   buscarPagoPorId,
   buscarPedidoPorId,
   crearPago,
+  obtenerPagoParaRecibo,
 } from "./pagos.repositorio";
 
 // Crea un pago PENDIENTE asociado a un pedido.
@@ -119,4 +120,65 @@ export const rechazarPagoServicio = async (pagoId: string) => {
   });
 
   return resultado;
+};
+
+const enmascararTarjeta = (valor?: string | null) => {
+  if (!valor) {
+    return undefined;
+  }
+  const limpio = String(valor);
+  if (limpio.length <= 4) {
+    return limpio;
+  }
+  return `****${limpio.slice(-4)}`;
+};
+
+const extraerDatosTransbank = (payload: unknown) => {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const commit = (payload as { commit?: Record<string, unknown> }).commit;
+  if (!commit || typeof commit !== "object") {
+    return null;
+  }
+
+  const cardDetail = (commit as { card_detail?: Record<string, unknown> }).card_detail || {};
+
+  return {
+    buyOrder: String((commit as { buy_order?: string }).buy_order ?? ""),
+    authorizationCode: String((commit as { authorization_code?: string }).authorization_code ?? ""),
+    paymentTypeCode: String((commit as { payment_type_code?: string }).payment_type_code ?? ""),
+    installmentsNumber: (commit as { installments_number?: number }).installments_number ?? null,
+    cardNumber: enmascararTarjeta((cardDetail as { card_number?: string }).card_number),
+    transactionDate: (commit as { transaction_date?: string }).transaction_date ?? null,
+  };
+};
+
+// Obtiene un pago con datos para boleta/recibo (sin token).
+export const obtenerPagoReciboServicio = async (pagoId: string) => {
+  const pago = await obtenerPagoParaRecibo(pagoId);
+  if (!pago) {
+    throw new ErrorApi("Pago no encontrado", 404, { id: pagoId });
+  }
+
+  const transbank =
+    pago.metodo === EcommerceMetodoPago.TRANSBANK ? extraerDatosTransbank(pago.gatewayPayloadJson) : null;
+
+  return {
+    pagoId: pago.id,
+    metodo: pago.metodo,
+    estado: pago.estado,
+    monto: pago.monto,
+    createdAt: pago.createdAt,
+    pedido: {
+      id: pago.pedido.id,
+      codigo: pago.pedido.codigo,
+      total: pago.pedido.total,
+      estado: pago.pedido.estado,
+      createdAt: pago.pedido.createdAt,
+    },
+    direccion: pago.pedido.direccion,
+    transbank,
+  };
 };

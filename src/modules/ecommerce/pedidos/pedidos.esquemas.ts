@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const pedidoCrearSchema = z.object({
   clienteId: z.string().min(1).optional(),
+  usuarioId: z.string().min(1).optional(),
   despacho: z
     .object({
       nombre: z.string().max(200).optional(),
@@ -25,6 +26,7 @@ export const pedidoCrearSchema = z.object({
 });
 
 export const pedidoDesdeCarritoSchema = z.object({
+  usuarioId: z.string().min(1).optional(),
   despacho: z
     .object({
       nombre: z.string().max(200).optional(),
