@@ -3,6 +3,8 @@ import { manejarAsync } from "../../../lib/manejarAsync";
 import { notificacionesQuerySchema } from "./notificaciones.esquemas";
 import { listarNotificacionesServicio } from "./notificaciones.servicio";
 
+// GET /api/ecommerce/notificaciones
+// Input: leido?, limit?, offset?. Output: lista de notificaciones.
 export const listarNotificaciones = manejarAsync(async (req: Request, res: Response) => {
   const query = notificacionesQuerySchema.parse(req.query);
   const notificaciones = await listarNotificacionesServicio(query);

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EcommerceEstadoPago, EcommerceMetodoPago } from "@prisma/client";
+import { EcommerceMetodoPago } from "@prisma/client";
 
 export const pagoCrearSchema = z.object({
   pedidoId: z.string().min(1),
@@ -8,5 +8,8 @@ export const pagoCrearSchema = z.object({
   referencia: z.string().max(200).optional(),
   evidenciaUrl: z.string().url().max(500).optional(),
   gatewayPayloadJson: z.unknown().optional(),
-  estado: z.nativeEnum(EcommerceEstadoPago).optional(),
+});
+
+export const pagoIdSchema = z.object({
+  id: z.string().min(1),
 });

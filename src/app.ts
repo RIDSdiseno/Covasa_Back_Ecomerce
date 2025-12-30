@@ -53,6 +53,7 @@ const uploadsDir = path.join(__dirname, "..", "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
 app.use("/uploads", express.static(uploadsDir));
 
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use("/api", routes);
 

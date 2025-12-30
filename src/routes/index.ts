@@ -18,6 +18,7 @@ router.get("/", (_req, res) => {
 
 router.get("/health", healthCheck);
 router.use("/productos", productosRouter);
+router.use("/products", productosRouter);
 router.use("/cotizaciones", cotizacionesRouter);
 router.use("/pagos", pagosRouter);
 router.use("/ecommerce", ecommerceRouter);

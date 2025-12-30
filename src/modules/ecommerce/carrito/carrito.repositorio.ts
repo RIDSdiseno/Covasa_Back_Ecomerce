@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from "@prisma/client";
+import { EcommerceEstadoCarrito, Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
@@ -26,12 +26,55 @@ export const obtenerCarritoPorId = (id: string) =>
 export const buscarCarritoPorId = (id: string, tx?: DbClient) =>
   db(tx).ecommerceCarrito.findUnique({
     where: { id },
-    select: { id: true },
+    select: { id: true, estado: true, clienteId: true },
+  });
+
+export const buscarCarritoActivoPorCliente = (clienteId: string, tx?: DbClient) =>
+  db(tx).ecommerceCarrito.findFirst({
+    where: {
+      clienteId,
+      estado: EcommerceEstadoCarrito.ACTIVO,
+    },
+    select: { id: true, estado: true, clienteId: true },
+  });
+
+export const actualizarCarritoEstado = (id: string, estado: EcommerceEstadoCarrito, tx?: DbClient) =>
+  db(tx).ecommerceCarrito.update({
+    where: { id },
+    data: { estado },
+  });
+
+export const actualizarCarritoTimestamp = (id: string, tx?: DbClient) =>
+  db(tx).ecommerceCarrito.update({
+    where: { id },
+    data: { updatedAt: new Date() },
   });
 
 export const buscarProductoPorId = (id: string, tx?: DbClient) =>
   db(tx).producto.findUnique({
     where: { id },
+  });
+
+export const buscarItemPorCarritoProducto = (
+  carritoId: string,
+  productoId: string,
+  tx?: DbClient
+) =>
+  db(tx).ecommerceCarritoItem.findUnique({
+    where: {
+      carritoId_productoId: {
+        carritoId,
+        productoId,
+      },
+    },
+  });
+
+export const buscarItemPorId = (carritoId: string, itemId: string, tx?: DbClient) =>
+  db(tx).ecommerceCarritoItem.findFirst({
+    where: {
+      id: itemId,
+      carritoId,
+    },
   });
 
 export const upsertCarritoItem = (
@@ -54,4 +97,24 @@ export const upsertCarritoItem = (
       ivaMontoSnapshot: data.ivaMontoSnapshot,
       totalSnapshot: data.totalSnapshot,
     },
+  });
+
+export const actualizarCarritoItem = (
+  itemId: string,
+  data: Prisma.EcommerceCarritoItemUpdateInput,
+  tx?: DbClient
+) =>
+  db(tx).ecommerceCarritoItem.update({
+    where: { id: itemId },
+    data,
+  });
+
+export const eliminarCarritoItem = (itemId: string, tx?: DbClient) =>
+  db(tx).ecommerceCarritoItem.delete({
+    where: { id: itemId },
+  });
+
+export const eliminarItemsCarrito = (carritoId: string, tx?: DbClient) =>
+  db(tx).ecommerceCarritoItem.deleteMany({
+    where: { carritoId },
   });
