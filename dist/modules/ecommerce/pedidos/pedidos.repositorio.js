@@ -57,7 +57,7 @@ const actualizarEstadoPedido = (id, estado, tx) => db(tx).ecommercePedido.update
 exports.actualizarEstadoPedido = actualizarEstadoPedido;
 const obtenerPedidoPorId = (id) => prisma_1.prisma.ecommercePedido.findUnique({
     where: { id },
-    include: { items: true, pagos: true },
+    include: { items: true, pagos: true, direccion: true },
 });
 exports.obtenerPedidoPorId = obtenerPedidoPorId;
 const obtenerCarritoPorId = (id, tx) => db(tx).ecommerceCarrito.findUnique({

@@ -8,6 +8,7 @@ const router = (0, express_1.Router)();
 router.post("/", pagos_controlador_1.crearPago);
 router.post("/mercadopago", mercadopago_controlador_1.crearMercadoPago);
 router.post("/transbank", transbank_controlador_1.crearTransbankPago);
+router.get("/:id", pagos_controlador_1.obtenerPagoRecibo);
 router.post("/transbank/return", transbank_controlador_1.recibirRetornoTransbank);
 router.get("/transbank/return", transbank_controlador_1.recibirRetornoTransbank);
 router.post("/transbank/commit", transbank_controlador_1.confirmarTransbankPago);

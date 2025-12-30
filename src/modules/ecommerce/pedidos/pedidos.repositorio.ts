@@ -74,7 +74,7 @@ export const actualizarEstadoPedido = (
 export const obtenerPedidoPorId = (id: string) =>
   prisma.ecommercePedido.findUnique({
     where: { id },
-    include: { items: true, pagos: true },
+    include: { items: true, pagos: true, direccion: true },
   });
 
 export const obtenerCarritoPorId = (id: string, tx?: DbClient) =>

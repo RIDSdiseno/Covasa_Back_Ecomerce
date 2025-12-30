@@ -4,6 +4,7 @@ exports.pedidoCarritoIdSchema = exports.pedidoIdSchema = exports.pedidoDesdeCarr
 const zod_1 = require("zod");
 exports.pedidoCrearSchema = zod_1.z.object({
     clienteId: zod_1.z.string().min(1).optional(),
+    usuarioId: zod_1.z.string().min(1).optional(),
     despacho: zod_1.z
         .object({
         nombre: zod_1.z.string().max(200).optional(),
@@ -24,6 +25,7 @@ exports.pedidoCrearSchema = zod_1.z.object({
         .min(1),
 });
 exports.pedidoDesdeCarritoSchema = zod_1.z.object({
+    usuarioId: zod_1.z.string().min(1).optional(),
     despacho: zod_1.z
         .object({
         nombre: zod_1.z.string().max(200).optional(),

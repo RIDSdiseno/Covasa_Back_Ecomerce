@@ -23,6 +23,7 @@ model Cliente {
   ecommerceCarritos     EcommerceCarrito[]
   ecommerceCotizaciones EcommerceCotizacion[]
   ecommercePedidos      EcommercePedido[]
+  ecommerceUsuarios     EcommerceUsuario[]
 
   @@index([nombre])
   @@index([rut])
@@ -85,6 +86,7 @@ model Inventario {
 
   @@index([productoId])
 }
+
 
 model PrecioProveedor {
   id          String    @id
@@ -249,6 +251,7 @@ model EcommercePedido {
   updatedAt         DateTime              @updatedAt
   pagos             EcommercePago[]
   cliente           Cliente?              @relation(fields: [clienteId], references: [id])
+  direccion         EcommerceDireccion?   @relation("PedidoDireccion")
   items             EcommercePedidoItem[]
 
   @@index([clienteId])
@@ -307,6 +310,45 @@ model EcommerceNotificacion {
   @@index([referenciaId])
 }
 
+
+
+model EcommerceUsuario {
+  id           String               @id @default(cuid())
+  nombre       String
+  email        String               @unique
+  telefono     String?
+  passwordHash String
+  clienteId    String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  cliente      Cliente?             @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  direcciones  EcommerceDireccion[]
+
+  @@index([clienteId])
+}
+
+model EcommerceDireccion {
+  id             String            @id @default(cuid())
+  usuarioId      String?
+  pedidoId       String?
+  nombreContacto String
+  telefono       String
+  email          String
+  direccion      String
+  comuna         String
+  ciudad         String?
+  region         String
+  notas          String?
+  esPrincipal    Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  usuario        EcommerceUsuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  pedido         EcommercePedido?  @relation("PedidoDireccion", fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@unique([pedidoId])
+  @@index([usuarioId])
+  @@index([usuarioId, esPrincipal])
+}
 model StockAlert {
   id           String           @id
   inventarioId String

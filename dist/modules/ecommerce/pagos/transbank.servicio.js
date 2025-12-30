@@ -12,6 +12,18 @@ const esProduccion = () => {
     const valor = (0, ecommerce_utilidades_1.normalizarTexto)(process.env.TRANSBANK_ENV).toLowerCase();
     return valor === "production" || valor === "produccion";
 };
+const enmascararToken = (token) => {
+    if (!token) {
+        return "";
+    }
+    if (token.length <= 8) {
+        return `${token.slice(0, 2)}****`;
+    }
+    return `${token.slice(0, 4)}****${token.slice(-4)}`;
+};
+const logTransbank = (mensaje, datos) => {
+    console.log(`[Transbank] ${mensaje}`, datos);
+};
 const obtenerClienteTransbank = () => {
     if (esProduccion()) {
         const comercio = (0, ecommerce_utilidades_1.normalizarTexto)(process.env.TRANSBANK_COMMERCE_CODE);
@@ -59,6 +71,7 @@ const crearTransbankPagoServicio = async (payload) => {
     if (pedido.total <= 0) {
         throw new errores_1.ErrorApi("Monto de pedido invalido", 409, { total: pedido.total });
     }
+    logTransbank("init", { pedidoId: pedido.id, total: pedido.total });
     const returnUrl = resolverReturnUrl(payload.returnUrl);
     const buyOrder = crearBuyOrder(pedido.codigo, pedido.id);
     const sessionId = crearSessionId(pedido.id);
@@ -68,11 +81,17 @@ const crearTransbankPagoServicio = async (payload) => {
         respuesta = (await cliente.create(buyOrder, sessionId, pedido.total, returnUrl));
     }
     catch (error) {
+        logTransbank("create_error", { pedidoId: pedido.id, error });
         throw new errores_1.ErrorApi("No fue posible crear la transaccion Transbank", 502, { error });
     }
     if (!respuesta?.token || !respuesta?.url) {
         throw new errores_1.ErrorApi("Respuesta Transbank invalida", 502, { respuesta });
     }
+    logTransbank("create_ok", {
+        pedidoId: pedido.id,
+        buyOrder,
+        token: enmascararToken(respuesta.token),
+    });
     const gatewayPayload = {
         create: {
             buyOrder,
@@ -96,12 +115,17 @@ const crearTransbankPagoServicio = async (payload) => {
         titulo: "Pago Transbank creado",
         detalle: `Pedido ${pedido.id}. Monto ${pedido.total}.`,
     });
+    logTransbank("pago_registrado", {
+        pedidoId: pedido.id,
+        pagoId: pago.id,
+        token: enmascararToken(respuesta.token),
+    });
     return {
         pagoId: pago.id,
         token: respuesta.token,
         url: respuesta.url,
-        redirectUrl: `${respuesta.url}?token_ws=${respuesta.token}`,
         monto: pago.monto,
+        buyOrder,
     };
 };
 exports.crearTransbankPagoServicio = crearTransbankPagoServicio;
@@ -109,8 +133,13 @@ exports.crearTransbankPagoServicio = crearTransbankPagoServicio;
 const confirmarTransbankPagoServicio = async (token) => {
     const pago = await (0, pagos_repositorio_1.buscarPagoPorReferencia)(token);
     if (!pago) {
-        throw new errores_1.ErrorApi("Pago no encontrado", 404, { token });
+        throw new errores_1.ErrorApi("Pago no encontrado", 404, { token: enmascararToken(token) });
     }
+    logTransbank("commit_inicio", {
+        pagoId: pago.id,
+        pedidoId: pago.pedidoId,
+        token: enmascararToken(token),
+    });
     if (pago.metodo !== client_1.EcommerceMetodoPago.TRANSBANK) {
         throw new errores_1.ErrorApi("Pago no corresponde a Transbank", 409, { id: pago.id });
     }
@@ -126,6 +155,12 @@ const confirmarTransbankPagoServicio = async (token) => {
         respuesta = (await cliente.commit(token));
     }
     catch (error) {
+        logTransbank("commit_error", {
+            pagoId: pago.id,
+            pedidoId: pago.pedidoId,
+            token: enmascararToken(token),
+            error,
+        });
         throw new errores_1.ErrorApi("No fue posible confirmar la transaccion Transbank", 502, { error });
     }
     const status = String(respuesta?.status ?? "");
@@ -150,6 +185,12 @@ const confirmarTransbankPagoServicio = async (token) => {
         });
         return pagoActualizado;
     });
+    logTransbank("commit_fin", {
+        pagoId: pago.id,
+        pedidoId: pago.pedidoId,
+        estado: nuevoEstado,
+        status,
+    });
     return {
         pago: actualizado,
         resultado: respuesta,
@@ -160,10 +201,12 @@ exports.confirmarTransbankPagoServicio = confirmarTransbankPagoServicio;
 // Obtiene el estado remoto de una transaccion Transbank.
 const obtenerEstadoTransbankServicio = async (token) => {
     const cliente = obtenerClienteTransbank();
+    logTransbank("status_inicio", { token: enmascararToken(token) });
     try {
         return (await cliente.status(token));
     }
     catch (error) {
+        logTransbank("status_error", { token: enmascararToken(token), error });
         throw new errores_1.ErrorApi("No fue posible consultar estado Transbank", 502, { error });
     }
 };

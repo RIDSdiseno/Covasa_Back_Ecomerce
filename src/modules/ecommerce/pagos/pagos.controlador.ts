@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { manejarAsync } from "../../../lib/manejarAsync";
 import { pagoCrearSchema, pagoIdSchema } from "./pagos.esquemas";
-import { confirmarPagoServicio, crearPagoServicio, rechazarPagoServicio } from "./pagos.servicio";
+import { confirmarPagoServicio, crearPagoServicio, rechazarPagoServicio, obtenerPagoReciboServicio } from "./pagos.servicio";
 
 // POST /api/ecommerce/payments
 // Input: { pedidoId, metodo, monto, referencia?, evidenciaUrl?, gatewayPayloadJson? }.
@@ -39,5 +39,17 @@ export const rechazarPago = manejarAsync(async (req: Request, res: Response) => 
     ok: true,
     data: { pagoId: pago.id, estado: pago.estado },
     message: "Pago rechazado",
+  });
+});
+
+// GET /api/ecommerce/payments/:id
+// Output: datos para boleta/recibo.
+export const obtenerPagoRecibo = manejarAsync(async (req: Request, res: Response) => {
+  const { id } = pagoIdSchema.parse(req.params);
+  const pago = await obtenerPagoReciboServicio(id);
+
+  res.json({
+    ok: true,
+    data: pago,
   });
 });

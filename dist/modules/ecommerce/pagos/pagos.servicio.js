@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.rechazarPagoServicio = exports.confirmarPagoServicio = exports.crearPagoServicio = void 0;
+exports.obtenerPagoReciboServicio = exports.rechazarPagoServicio = exports.confirmarPagoServicio = exports.crearPagoServicio = void 0;
 const client_1 = require("@prisma/client");
 const errores_1 = require("../../../lib/errores");
 const prisma_1 = require("../../../lib/prisma");
@@ -91,3 +91,56 @@ const rechazarPagoServicio = async (pagoId) => {
     return resultado;
 };
 exports.rechazarPagoServicio = rechazarPagoServicio;
+const enmascararTarjeta = (valor) => {
+    if (!valor) {
+        return undefined;
+    }
+    const limpio = String(valor);
+    if (limpio.length <= 4) {
+        return limpio;
+    }
+    return `****${limpio.slice(-4)}`;
+};
+const extraerDatosTransbank = (payload) => {
+    if (!payload || typeof payload !== "object") {
+        return null;
+    }
+    const commit = payload.commit;
+    if (!commit || typeof commit !== "object") {
+        return null;
+    }
+    const cardDetail = commit.card_detail || {};
+    return {
+        buyOrder: String(commit.buy_order ?? ""),
+        authorizationCode: String(commit.authorization_code ?? ""),
+        paymentTypeCode: String(commit.payment_type_code ?? ""),
+        installmentsNumber: commit.installments_number ?? null,
+        cardNumber: enmascararTarjeta(cardDetail.card_number),
+        transactionDate: commit.transaction_date ?? null,
+    };
+};
+// Obtiene un pago con datos para boleta/recibo (sin token).
+const obtenerPagoReciboServicio = async (pagoId) => {
+    const pago = await (0, pagos_repositorio_1.obtenerPagoParaRecibo)(pagoId);
+    if (!pago) {
+        throw new errores_1.ErrorApi("Pago no encontrado", 404, { id: pagoId });
+    }
+    const transbank = pago.metodo === client_1.EcommerceMetodoPago.TRANSBANK ? extraerDatosTransbank(pago.gatewayPayloadJson) : null;
+    return {
+        pagoId: pago.id,
+        metodo: pago.metodo,
+        estado: pago.estado,
+        monto: pago.monto,
+        createdAt: pago.createdAt,
+        pedido: {
+            id: pago.pedido.id,
+            codigo: pago.pedido.codigo,
+            total: pago.pedido.total,
+            estado: pago.pedido.estado,
+            createdAt: pago.pedido.createdAt,
+        },
+        direccion: pago.pedido.direccion,
+        transbank,
+    };
+};
+exports.obtenerPagoReciboServicio = obtenerPagoReciboServicio;

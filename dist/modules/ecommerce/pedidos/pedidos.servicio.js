@@ -7,6 +7,7 @@ const errores_1 = require("../../../lib/errores");
 const prisma_1 = require("../../../lib/prisma");
 const ecommerce_utilidades_1 = require("../ecommerce.utilidades");
 const notificaciones_servicio_1 = require("../notificaciones/notificaciones.servicio");
+const usuarios_repositorio_1 = require("../usuarios/usuarios.repositorio");
 const pedidos_repositorio_1 = require("./pedidos.repositorio");
 const validarStockConfigurado = () => process.env.ECOMMERCE_VALIDAR_STOCK === "true";
 const normalizarNullable = (valor) => (0, ecommerce_utilidades_1.normalizarTexto)(valor ?? undefined);
@@ -45,6 +46,55 @@ const resolverDespacho = (despacho, cliente) => {
         notas: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.notas) || undefined,
     };
 };
+const validarDespachoCompleto = (despacho) => {
+    const faltantes = [];
+    if (!despacho.nombre)
+        faltantes.push("nombre");
+    if (!despacho.telefono)
+        faltantes.push("telefono");
+    if (!despacho.email)
+        faltantes.push("email");
+    if (!despacho.direccion)
+        faltantes.push("direccion");
+    if (!despacho.comuna)
+        faltantes.push("comuna");
+    if (!despacho.region)
+        faltantes.push("region");
+    if (faltantes.length > 0) {
+        throw new errores_1.ErrorApi("Datos de despacho incompletos", 400, { campos: faltantes });
+    }
+};
+const resolverUsuarioEcommerce = async (usuarioId) => {
+    if (!usuarioId) {
+        return null;
+    }
+    const usuario = await (0, usuarios_repositorio_1.buscarUsuarioPorId)(usuarioId);
+    if (!usuario) {
+        throw new errores_1.ErrorApi("Usuario ecommerce no encontrado", 404, { id: usuarioId });
+    }
+    return {
+        id: usuario.id,
+        clienteId: usuario.clienteId ?? null,
+    };
+};
+const registrarDireccionPedido = async (datos) => {
+    if (datos.usuarioId) {
+        await (0, usuarios_repositorio_1.limpiarDireccionesPrincipales)(datos.usuarioId, datos.tx);
+    }
+    return (0, usuarios_repositorio_1.crearDireccion)({
+        pedido: { connect: { id: datos.pedidoId } },
+        usuario: datos.usuarioId ? { connect: { id: datos.usuarioId } } : undefined,
+        nombreContacto: datos.despacho.nombre ?? "",
+        telefono: datos.despacho.telefono ?? "",
+        email: datos.despacho.email ?? "",
+        direccion: datos.despacho.direccion ?? "",
+        comuna: datos.despacho.comuna ?? "",
+        ciudad: datos.despacho.ciudad ?? undefined,
+        region: datos.despacho.region ?? "",
+        notas: datos.despacho.notas ?? undefined,
+        esPrincipal: Boolean(datos.usuarioId),
+    }, datos.tx);
+};
 // Crea pedido desde items directos, calcula snapshots y notifica.
 const crearPedidoServicio = async (payload) => {
     const ivaPct = (0, ecommerce_utilidades_1.obtenerIvaPct)();
@@ -56,11 +106,13 @@ const crearPedidoServicio = async (payload) => {
     if (faltantes.length > 0) {
         throw new errores_1.ErrorApi("Productos no encontrados", 404, { productos: faltantes });
     }
+    const usuario = await resolverUsuarioEcommerce(payload.usuarioId);
+    const clienteIdFinal = payload.clienteId || usuario?.clienteId || undefined;
     let cliente = null;
-    if (payload.clienteId) {
-        const encontrado = await (0, pedidos_repositorio_1.buscarClientePorId)(payload.clienteId);
+    if (clienteIdFinal) {
+        const encontrado = await (0, pedidos_repositorio_1.buscarClientePorId)(clienteIdFinal);
         if (!encontrado) {
-            throw new errores_1.ErrorApi("Cliente no encontrado", 404, { id: payload.clienteId });
+            throw new errores_1.ErrorApi("Cliente no encontrado", 404, { id: clienteIdFinal });
         }
         cliente = encontrado;
     }
@@ -92,10 +144,11 @@ const crearPedidoServicio = async (payload) => {
     const total = subtotalNeto + ivaTotal;
     const codigoTemporal = `ECP-TMP-${(0, crypto_1.randomUUID)()}`;
     const despachoFinal = resolverDespacho(payload.despacho, cliente);
+    validarDespachoCompleto(despachoFinal);
     const resultado = await prisma_1.prisma.$transaction(async (tx) => {
         const creado = await (0, pedidos_repositorio_1.crearPedido)({
             codigo: codigoTemporal,
-            cliente: payload.clienteId ? { connect: { id: payload.clienteId } } : undefined,
+            cliente: clienteIdFinal ? { connect: { id: clienteIdFinal } } : undefined,
             despachoNombre: despachoFinal.nombre,
             despachoTelefono: despachoFinal.telefono,
             despachoEmail: despachoFinal.email,
@@ -111,6 +164,12 @@ const crearPedidoServicio = async (payload) => {
         }, tx);
         const codigoFinal = (0, ecommerce_utilidades_1.formatearCodigo)("ECP", creado.correlativo);
         const actualizado = await (0, pedidos_repositorio_1.actualizarCodigoPedido)(creado.id, codigoFinal, tx);
+        await registrarDireccionPedido({
+            pedidoId: creado.id,
+            usuarioId: payload.usuarioId,
+            despacho: despachoFinal,
+            tx,
+        });
         await (0, notificaciones_servicio_1.registrarNotificacion)({
             tipo: "NUEVO_PEDIDO",
             referenciaTabla: "EcommercePedido",
@@ -125,7 +184,7 @@ const crearPedidoServicio = async (payload) => {
 };
 exports.crearPedidoServicio = crearPedidoServicio;
 // Crea pedido desde un carrito existente y marca el carrito como CONVERTIDO.
-const crearPedidoDesdeCarritoServicio = async (cartId, despacho) => {
+const crearPedidoDesdeCarritoServicio = async (cartId, despacho, usuarioId) => {
     const carrito = await (0, pedidos_repositorio_1.obtenerCarritoPorId)(cartId);
     if (!carrito) {
         throw new errores_1.ErrorApi("Carrito no encontrado", 404, { id: cartId });
@@ -158,12 +217,15 @@ const crearPedidoDesdeCarritoServicio = async (cartId, despacho) => {
     });
     const totales = (0, ecommerce_utilidades_1.calcularTotales)(carrito.items);
     const codigoTemporal = `ECP-TMP-${(0, crypto_1.randomUUID)()}`;
-    const cliente = carrito.clienteId ? (await (0, pedidos_repositorio_1.buscarClientePorId)(carrito.clienteId)) : null;
+    const usuario = await resolverUsuarioEcommerce(usuarioId);
+    const clienteIdFinal = carrito.clienteId || usuario?.clienteId || undefined;
+    const cliente = clienteIdFinal ? (await (0, pedidos_repositorio_1.buscarClientePorId)(clienteIdFinal)) : null;
     const despachoFinal = resolverDespacho(despacho, cliente);
+    validarDespachoCompleto(despachoFinal);
     const resultado = await prisma_1.prisma.$transaction(async (tx) => {
         const creado = await (0, pedidos_repositorio_1.crearPedido)({
             codigo: codigoTemporal,
-            cliente: carrito.clienteId ? { connect: { id: carrito.clienteId } } : undefined,
+            cliente: clienteIdFinal ? { connect: { id: clienteIdFinal } } : undefined,
             despachoNombre: despachoFinal.nombre,
             despachoTelefono: despachoFinal.telefono,
             despachoEmail: despachoFinal.email,
@@ -179,6 +241,12 @@ const crearPedidoDesdeCarritoServicio = async (cartId, despacho) => {
         }, tx);
         const codigoFinal = (0, ecommerce_utilidades_1.formatearCodigo)("ECP", creado.correlativo);
         const actualizado = await (0, pedidos_repositorio_1.actualizarCodigoPedido)(creado.id, codigoFinal, tx);
+        await registrarDireccionPedido({
+            pedidoId: creado.id,
+            usuarioId,
+            despacho: despachoFinal,
+            tx,
+        });
         await (0, pedidos_repositorio_1.actualizarCarritoEstado)(cartId, client_1.EcommerceEstadoCarrito.CONVERTIDO, tx);
         await (0, notificaciones_servicio_1.registrarNotificacion)({
             tipo: "NUEVO_PEDIDO",

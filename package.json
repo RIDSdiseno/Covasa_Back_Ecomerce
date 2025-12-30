@@ -12,7 +12,8 @@
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "prebuild": "prisma generate"
   },
   "dependencies": {
     "@mercadopago/sdk-react": "^1.0.7",

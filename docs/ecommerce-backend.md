@@ -1,4 +1,4 @@
-# Backend ecommerce COVASA
+﻿# Backend ecommerce COVASA
 
 ## Variables de entorno relevantes
 - `DATABASE_URL`: conexion PostgreSQL.
@@ -6,6 +6,7 @@
 - `ECOMMERCE_VALIDAR_STOCK`: `true` para validar stock al crear pedido.
 - `CORS_ALLOW_ALL`: `true` para permitir todos los origenes.
 - `ALLOWED_ORIGINS`: lista separada por comas.
+- `ECOMMERCE_SALT_ROUNDS`: rounds bcrypt para usuarios ecommerce (default 10).
 
 ### Transbank (Webpay Plus)
 - `TRANSBANK_ENV`: `integration` | `production`.
@@ -26,6 +27,10 @@
 ### Clientes (solo lectura)
 - `GET /api/ecommerce/clientes/:id`
 
+### Usuarios ecommerce
+- `POST /api/ecommerce/usuarios/registro`
+- `POST /api/ecommerce/usuarios/login`
+
 ### Cotizaciones
 - `POST /api/cotizaciones` (legacy)
 - `POST /api/ecommerce/quotes`
@@ -41,11 +46,13 @@
 - `DELETE /api/ecommerce/cart/:id/items`
 
 ### Pedidos
+- `POST /api/ecommerce/orders`
 - `POST /api/ecommerce/orders/from-cart/:cartId`
 - `GET /api/ecommerce/orders/:id`
 
 ### Pagos (placeholder)
 - `POST /api/ecommerce/payments`
+- `GET /api/ecommerce/payments/:id`
 - `PATCH /api/ecommerce/payments/:id/confirm`
 - `PATCH /api/ecommerce/payments/:id/reject`
 
@@ -59,14 +66,15 @@
 - `POST /api/ecommerce/payments/mercadopago`
 
 ## Flujo Transbank (backend)
-1) Crear pedido (por ejemplo desde carrito).
+1) Crear pedido (por ejemplo desde carrito) via `POST /api/ecommerce/orders`.
 2) Iniciar pago Transbank:
-   - `POST /api/ecommerce/payments/transbank` con `{ pedidoId, returnUrl? }`.
-   - Respuesta incluye `{ token, url, redirectUrl }`.
-3) Redirigir al usuario a `redirectUrl`.
-4) Transbank redirige a `TRANSBANK_RETURN_URL` con `token_ws`.
-5) El backend redirige al front `/pago/transbank?token_ws=...`.
-6) El front confirma llamando `/api/ecommerce/payments/transbank/commit`.
+   - Navegador envia `POST /api/ecommerce/payments/transbank` (form POST).
+   - Respuesta: HTML que auto-redirige a Webpay (token no visible).
+   - Si se usa API JSON, la respuesta incluye `{ pagoId, url, monto }` sin token.
+3) Transbank redirige a `TRANSBANK_RETURN_URL` con `token_ws`.
+4) Backend confirma (commit) y redirige al front:
+   - `/pago/transbank?pagoId=...&pedidoId=...&estado=CONFIRMADO|RECHAZADO|ERROR`
+5) Front consulta `GET /api/ecommerce/payments/:id` para boleta/recibo.
 
 ## Flujo Mercado Pago (backend)
 1) Crear pedido (por ejemplo desde carrito).
@@ -78,23 +86,36 @@
 
 ## Ejemplos cURL
 
-### Iniciar pago Transbank
+### Registrar usuario
+```bash
+curl -X POST "http://localhost:3000/api/ecommerce/usuarios/registro" \
+  -H "Content-Type: application/json" \
+  -d '{"nombre":"Juan Perez","email":"juan@correo.cl","password":"Secreto123"}'
+```
+
+### Login usuario
+```bash
+curl -X POST "http://localhost:3000/api/ecommerce/usuarios/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"juan@correo.cl","password":"Secreto123"}'
+```
+
+### Iniciar pago Transbank (JSON)
 ```bash
 curl -X POST "http://localhost:3000/api/ecommerce/payments/transbank" \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
   -d '{"pedidoId":"PEDIDO_ID"}'
-```
-
-### Confirmar pago Transbank
-```bash
-curl -X POST "http://localhost:3000/api/ecommerce/payments/transbank/commit" \
-  -H "Content-Type: application/json" \
-  -d '{"token":"TOKEN_WS"}'
 ```
 
 ### Estado Transbank
 ```bash
 curl -X GET "http://localhost:3000/api/ecommerce/payments/transbank/status/TOKEN_WS"
+```
+
+### Obtener boleta/recibo
+```bash
+curl -X GET "http://localhost:3000/api/ecommerce/payments/PAGO_ID"
 ```
 
 ### Iniciar pago Mercado Pago

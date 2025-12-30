@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.actualizarPedidoEstado = exports.actualizarPagoEstado = exports.actualizarPagoDatos = exports.buscarPagoPorReferencia = exports.buscarPagoPorId = exports.crearPago = exports.buscarPedidoParaMercadoPago = exports.buscarPedidoParaPago = exports.buscarPedidoPorId = void 0;
+exports.obtenerPagoParaRecibo = exports.actualizarPedidoEstado = exports.actualizarPagoEstado = exports.actualizarPagoDatos = exports.buscarPagoPorReferencia = exports.buscarPagoPorId = exports.crearPago = exports.buscarPedidoParaMercadoPago = exports.buscarPedidoParaPago = exports.buscarPedidoPorId = void 0;
 const prisma_1 = require("../../../lib/prisma");
 const db = (tx) => tx ?? prisma_1.prisma;
 const buscarPedidoPorId = (id, tx) => db(tx).ecommercePedido.findUnique({
@@ -71,3 +71,36 @@ const actualizarPedidoEstado = (id, estado, tx) => db(tx).ecommercePedido.update
     data: { estado },
 });
 exports.actualizarPedidoEstado = actualizarPedidoEstado;
+const obtenerPagoParaRecibo = (id, tx) => db(tx).ecommercePago.findUnique({
+    where: { id },
+    select: {
+        id: true,
+        metodo: true,
+        estado: true,
+        monto: true,
+        createdAt: true,
+        gatewayPayloadJson: true,
+        pedido: {
+            select: {
+                id: true,
+                codigo: true,
+                total: true,
+                estado: true,
+                createdAt: true,
+                direccion: {
+                    select: {
+                        nombreContacto: true,
+                        telefono: true,
+                        email: true,
+                        direccion: true,
+                        comuna: true,
+                        ciudad: true,
+                        region: true,
+                        notas: true,
+                    },
+                },
+            },
+        },
+    },
+});
+exports.obtenerPagoParaRecibo = obtenerPagoParaRecibo;

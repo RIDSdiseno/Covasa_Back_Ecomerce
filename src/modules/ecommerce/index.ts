@@ -2,6 +2,7 @@ import { Router } from "express";
 import catalogoRouter from "./catalogo/catalogo.rutas";
 import carritoRouter from "./carrito/carrito.rutas";
 import clientesRouter from "./clientes/clientes.rutas";
+import usuariosRouter from "./usuarios/usuarios.rutas";
 import cotizacionesRouter from "./cotizaciones/cotizaciones.rutas";
 import quotesRouter from "./cotizaciones/quotes.rutas";
 import pedidosRouter from "./pedidos/pedidos.rutas";
@@ -21,5 +22,6 @@ router.use("/pagos", pagosRouter);
 router.use("/payments", pagosRouter);
 router.use("/notificaciones", notificacionesRouter);
 router.use("/clientes", clientesRouter);
+router.use("/usuarios", usuariosRouter);
 
 export default router;
