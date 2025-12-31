@@ -9,7 +9,7 @@ const buscarProductosPorIds = (ids, tx) => db(tx).producto.findMany({
     },
 });
 exports.buscarProductosPorIds = buscarProductosPorIds;
-const buscarClientePorId = (id, tx) => db(tx).cliente.findUnique({
+const buscarClientePorId = (id, tx) => db(tx).ecommerceCliente.findUnique({
     where: { id },
     select: { id: true },
 });

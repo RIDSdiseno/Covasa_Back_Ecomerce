@@ -13,6 +13,12 @@ const buscarProductos = (filtros) => prisma_1.prisma.producto.findMany({
                 stock: true,
             },
         },
+        ProductoImagen: {
+            select: {
+                url: true,
+                orden: true,
+            },
+        },
     },
     orderBy: {
         nombre: "asc",
@@ -27,6 +33,12 @@ const buscarProductoPorId = (id) => prisma_1.prisma.producto.findUnique({
         Inventario: {
             select: {
                 stock: true,
+            },
+        },
+        ProductoImagen: {
+            select: {
+                url: true,
+                orden: true,
             },
         },
     },

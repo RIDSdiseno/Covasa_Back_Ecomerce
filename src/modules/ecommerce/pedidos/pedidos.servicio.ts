@@ -1,10 +1,18 @@
 import { randomUUID } from "crypto";
-import { EcommerceEstadoCarrito, EcommerceEstadoPedido } from "@prisma/client";
+import {
+  CrmEstadoCotizacion,
+  CrmTipoCierre,
+  EcommerceEstadoCarrito,
+  EcommerceEstadoPedido,
+  OrigenCliente,
+} from "@prisma/client";
 import { ErrorApi } from "../../../lib/errores";
 import { prisma } from "../../../lib/prisma";
 import {
   agruparItems,
   calcularTotales,
+  construirDireccionLinea,
+  construirNombreCompleto,
   formatearCodigo,
   normalizarTexto,
   obtenerIvaPct,
@@ -14,6 +22,7 @@ import {
   buscarUsuarioPorId,
   crearDireccion,
   limpiarDireccionesPrincipales,
+  obtenerDireccionPrincipal,
 } from "../usuarios/usuarios.repositorio";
 import {
   actualizarCarritoEstado,
@@ -41,19 +50,28 @@ type DespachoPayload = {
 
 type ClienteDespacho = {
   id: string;
-  nombre: string;
-  personaContacto: string | null;
-  email: string | null;
+  nombres: string | null;
+  apellidos: string | null;
+  emailContacto: string | null;
   telefono: string | null;
-  direccion: string | null;
-  comuna: string | null;
-  ciudad: string | null;
-  region: string | null;
 };
 
 type UsuarioEcommerce = {
   id: string;
-  clienteId: string | null;
+  ecommerceClienteId: string | null;
+};
+
+type DireccionDespacho = {
+  nombreRecibe: string;
+  telefonoRecibe: string;
+  email: string;
+  calle: string;
+  numero: string | null;
+  depto: string | null;
+  comuna: string;
+  ciudad: string | null;
+  region: string;
+  notas: string | null;
 };
 
 const validarStockConfigurado = () => process.env.ECOMMERCE_VALIDAR_STOCK === "true";
@@ -86,18 +104,49 @@ const validarStockDisponible = async (items: ItemSolicitud[]) => {
   }
 };
 
-const resolverDespacho = (despacho?: DespachoPayload, cliente?: ClienteDespacho | null) => {
-  const nombreCliente = normalizarNullable(cliente?.personaContacto) || normalizarNullable(cliente?.nombre);
+const resolverDespacho = (
+  despacho?: DespachoPayload,
+  cliente?: ClienteDespacho | null,
+  direccionPrincipal?: DireccionDespacho | null
+) => {
+  const nombreCliente = construirNombreCompleto(cliente?.nombres, cliente?.apellidos);
+  const direccionPrincipalLinea = direccionPrincipal
+    ? construirDireccionLinea(direccionPrincipal.calle, direccionPrincipal.numero, direccionPrincipal.depto)
+    : "";
 
   return {
-    nombre: normalizarTexto(despacho?.nombre) || nombreCliente || undefined,
-    telefono: normalizarTexto(despacho?.telefono) || normalizarNullable(cliente?.telefono) || undefined,
-    email: normalizarTexto(despacho?.email) || normalizarNullable(cliente?.email) || undefined,
-    direccion: normalizarTexto(despacho?.direccion) || normalizarNullable(cliente?.direccion) || undefined,
-    comuna: normalizarTexto(despacho?.comuna) || normalizarNullable(cliente?.comuna) || undefined,
-    ciudad: normalizarTexto(despacho?.ciudad) || normalizarNullable(cliente?.ciudad) || undefined,
-    region: normalizarTexto(despacho?.region) || normalizarNullable(cliente?.region) || undefined,
-    notas: normalizarTexto(despacho?.notas) || undefined,
+    nombre:
+      normalizarTexto(despacho?.nombre) ||
+      normalizarNullable(direccionPrincipal?.nombreRecibe) ||
+      nombreCliente ||
+      undefined,
+    telefono:
+      normalizarTexto(despacho?.telefono) ||
+      normalizarNullable(direccionPrincipal?.telefonoRecibe) ||
+      normalizarNullable(cliente?.telefono) ||
+      undefined,
+    email:
+      normalizarTexto(despacho?.email) ||
+      normalizarNullable(direccionPrincipal?.email) ||
+      normalizarNullable(cliente?.emailContacto) ||
+      undefined,
+    direccion:
+      normalizarTexto(despacho?.direccion) ||
+      normalizarNullable(direccionPrincipalLinea) ||
+      undefined,
+    comuna:
+      normalizarTexto(despacho?.comuna) ||
+      normalizarNullable(direccionPrincipal?.comuna) ||
+      undefined,
+    ciudad:
+      normalizarTexto(despacho?.ciudad) ||
+      normalizarNullable(direccionPrincipal?.ciudad) ||
+      undefined,
+    region:
+      normalizarTexto(despacho?.region) ||
+      normalizarNullable(direccionPrincipal?.region) ||
+      undefined,
+    notas: normalizarTexto(despacho?.notas) || normalizarNullable(direccionPrincipal?.notas) || undefined,
   };
 };
 
@@ -128,33 +177,35 @@ const resolverUsuarioEcommerce = async (usuarioId?: string): Promise<UsuarioEcom
 
   return {
     id: usuario.id,
-    clienteId: usuario.clienteId ?? null,
+    ecommerceClienteId: usuario.cliente?.id ?? null,
   };
 };
 
 const registrarDireccionPedido = async (datos: {
   pedidoId: string;
-  usuarioId?: string;
+  ecommerceClienteId?: string;
   despacho: DespachoPayload;
   tx: Parameters<typeof crearDireccion>[1];
 }) => {
-  if (datos.usuarioId) {
-    await limpiarDireccionesPrincipales(datos.usuarioId, datos.tx);
+  if (datos.ecommerceClienteId) {
+    await limpiarDireccionesPrincipales(datos.ecommerceClienteId, datos.tx);
   }
 
   return crearDireccion(
     {
       pedido: { connect: { id: datos.pedidoId } },
-      usuario: datos.usuarioId ? { connect: { id: datos.usuarioId } } : undefined,
-      nombreContacto: datos.despacho.nombre ?? "",
-      telefono: datos.despacho.telefono ?? "",
+      ecommerceCliente: datos.ecommerceClienteId
+        ? { connect: { id: datos.ecommerceClienteId } }
+        : undefined,
+      nombreRecibe: datos.despacho.nombre ?? "",
+      telefonoRecibe: datos.despacho.telefono ?? "",
       email: datos.despacho.email ?? "",
-      direccion: datos.despacho.direccion ?? "",
+      calle: datos.despacho.direccion ?? "",
       comuna: datos.despacho.comuna ?? "",
       ciudad: datos.despacho.ciudad ?? undefined,
       region: datos.despacho.region ?? "",
       notas: datos.despacho.notas ?? undefined,
-      esPrincipal: Boolean(datos.usuarioId),
+      principal: Boolean(datos.ecommerceClienteId),
     },
     datos.tx
   );
@@ -162,7 +213,7 @@ const registrarDireccionPedido = async (datos: {
 
 // Crea pedido desde items directos, calcula snapshots y notifica.
 export const crearPedidoServicio = async (payload: {
-  clienteId?: string;
+  ecommerceClienteId?: string;
   usuarioId?: string;
   despacho?: DespachoPayload;
   items: ItemSolicitud[];
@@ -179,15 +230,17 @@ export const crearPedidoServicio = async (payload: {
   }
 
   const usuario = await resolverUsuarioEcommerce(payload.usuarioId);
-  const clienteIdFinal = payload.clienteId || usuario?.clienteId || undefined;
+  const ecommerceClienteId = payload.ecommerceClienteId ?? usuario?.ecommerceClienteId ?? undefined;
 
   let cliente: ClienteDespacho | null = null;
-  if (clienteIdFinal) {
-    const encontrado = await buscarClientePorId(clienteIdFinal);
+  let direccionPrincipal: DireccionDespacho | null = null;
+  if (ecommerceClienteId) {
+    const encontrado = await buscarClientePorId(ecommerceClienteId);
     if (!encontrado) {
-      throw new ErrorApi("Cliente no encontrado", 404, { id: clienteIdFinal });
+      throw new ErrorApi("Cliente no encontrado", 404, { id: ecommerceClienteId });
     }
     cliente = encontrado as ClienteDespacho;
+    direccionPrincipal = await obtenerDireccionPrincipal(ecommerceClienteId);
   }
 
   await validarStockDisponible(itemsAgrupados);
@@ -222,15 +275,32 @@ export const crearPedidoServicio = async (payload: {
 
   const total = subtotalNeto + ivaTotal;
   const codigoTemporal = `ECP-TMP-${randomUUID()}`;
-  const despachoFinal = resolverDespacho(payload.despacho, cliente);
+  const despachoFinal = resolverDespacho(payload.despacho, cliente, direccionPrincipal);
 
   validarDespachoCompleto(despachoFinal);
 
   const resultado = await prisma.$transaction(async (tx) => {
+    const crmCotizacion = await tx.crmCotizacion.create({
+      data: {
+        clienteNombreSnapshot: normalizarTexto(despachoFinal.nombre),
+        clienteEmailSnapshot: normalizarTexto(despachoFinal.email) || undefined,
+        clienteTelefonoSnapshot: normalizarTexto(despachoFinal.telefono) || undefined,
+        observaciones: normalizarTexto(despachoFinal.notas) || undefined,
+        subtotalNeto,
+        iva: ivaTotal,
+        total,
+        estado: CrmEstadoCotizacion.GANADA,
+        tipoCierre: CrmTipoCierre.COMPRA,
+        origenCliente: OrigenCliente.CLIENTE_ECOMMERCE,
+      },
+      select: { id: true },
+    });
+
     const creado = await crearPedido(
       {
         codigo: codigoTemporal,
-        cliente: clienteIdFinal ? { connect: { id: clienteIdFinal } } : undefined,
+        ecommerceCliente: ecommerceClienteId ? { connect: { id: ecommerceClienteId } } : undefined,
+        crmCotizacion: { connect: { id: crmCotizacion.id } },
         despachoNombre: despachoFinal.nombre,
         despachoTelefono: despachoFinal.telefono,
         despachoEmail: despachoFinal.email,
@@ -252,7 +322,7 @@ export const crearPedidoServicio = async (payload: {
 
     await registrarDireccionPedido({
       pedidoId: creado.id,
-      usuarioId: payload.usuarioId,
+      ecommerceClienteId,
       despacho: despachoFinal,
       tx,
     });
@@ -318,17 +388,41 @@ export const crearPedidoDesdeCarritoServicio = async (
   const totales = calcularTotales(carrito.items);
   const codigoTemporal = `ECP-TMP-${randomUUID()}`;
   const usuario = await resolverUsuarioEcommerce(usuarioId);
-  const clienteIdFinal = carrito.clienteId || usuario?.clienteId || undefined;
-  const cliente = clienteIdFinal ? ((await buscarClientePorId(clienteIdFinal)) as ClienteDespacho | null) : null;
-  const despachoFinal = resolverDespacho(despacho, cliente);
+  const ecommerceClienteId = carrito.ecommerceClienteId || usuario?.ecommerceClienteId || undefined;
+  const cliente = ecommerceClienteId
+    ? ((await buscarClientePorId(ecommerceClienteId)) as ClienteDespacho | null)
+    : null;
+  const direccionPrincipal = ecommerceClienteId
+    ? ((await obtenerDireccionPrincipal(ecommerceClienteId)) as DireccionDespacho | null)
+    : null;
+  const despachoFinal = resolverDespacho(despacho, cliente, direccionPrincipal);
 
   validarDespachoCompleto(despachoFinal);
 
   const resultado = await prisma.$transaction(async (tx) => {
+    const crmCotizacion = await tx.crmCotizacion.create({
+      data: {
+        clienteNombreSnapshot: normalizarTexto(despachoFinal.nombre),
+        clienteEmailSnapshot: normalizarTexto(despachoFinal.email) || undefined,
+        clienteTelefonoSnapshot: normalizarTexto(despachoFinal.telefono) || undefined,
+        observaciones: normalizarTexto(despachoFinal.notas) || undefined,
+        subtotalNeto: totales.subtotalNeto,
+        iva: totales.iva,
+        total: totales.total,
+        estado: CrmEstadoCotizacion.GANADA,
+        tipoCierre: CrmTipoCierre.COMPRA,
+        origenCliente: OrigenCliente.CLIENTE_ECOMMERCE,
+      },
+      select: { id: true },
+    });
+
     const creado = await crearPedido(
       {
         codigo: codigoTemporal,
-        cliente: clienteIdFinal ? { connect: { id: clienteIdFinal } } : undefined,
+        ecommerceCliente: ecommerceClienteId
+          ? { connect: { id: ecommerceClienteId } }
+          : undefined,
+        crmCotizacion: { connect: { id: crmCotizacion.id } },
         despachoNombre: despachoFinal.nombre,
         despachoTelefono: despachoFinal.telefono,
         despachoEmail: despachoFinal.email,
@@ -350,7 +444,7 @@ export const crearPedidoDesdeCarritoServicio = async (
 
     await registrarDireccionPedido({
       pedidoId: creado.id,
-      usuarioId,
+      ecommerceClienteId,
       despacho: despachoFinal,
       tx,
     });

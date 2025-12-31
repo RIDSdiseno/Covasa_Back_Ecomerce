@@ -7,18 +7,14 @@ const buscarProductosPorIds = (ids, tx) => db(tx).producto.findMany({
     where: { id: { in: ids } },
 });
 exports.buscarProductosPorIds = buscarProductosPorIds;
-const buscarClientePorId = (id, tx) => db(tx).cliente.findUnique({
+const buscarClientePorId = (id, tx) => db(tx).ecommerceCliente.findUnique({
     where: { id },
     select: {
         id: true,
-        nombre: true,
-        personaContacto: true,
-        email: true,
+        nombres: true,
+        apellidos: true,
+        emailContacto: true,
         telefono: true,
-        direccion: true,
-        comuna: true,
-        ciudad: true,
-        region: true,
     },
 });
 exports.buscarClientePorId = buscarClientePorId;

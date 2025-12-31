@@ -17,7 +17,7 @@ import {
 } from "./carrito.servicio";
 
 // POST /api/ecommerce/cart
-// Input: { clienteId? }. Output: { carritoId, estado }.
+// Input: { ecommerceClienteId? }. Output: { carritoId, estado }.
 export const crearCarrito = manejarAsync(async (req: Request, res: Response) => {
   const payload = carritoCrearSchema.parse(req.body);
   const carrito = await crearCarritoServicio(payload);

@@ -22,15 +22,15 @@ const obtenerCarritoPorId = (id) => prisma_1.prisma.ecommerceCarrito.findUnique(
 exports.obtenerCarritoPorId = obtenerCarritoPorId;
 const buscarCarritoPorId = (id, tx) => db(tx).ecommerceCarrito.findUnique({
     where: { id },
-    select: { id: true, estado: true, clienteId: true },
+    select: { id: true, estado: true, ecommerceClienteId: true },
 });
 exports.buscarCarritoPorId = buscarCarritoPorId;
-const buscarCarritoActivoPorCliente = (clienteId, tx) => db(tx).ecommerceCarrito.findFirst({
+const buscarCarritoActivoPorCliente = (ecommerceClienteId, tx) => db(tx).ecommerceCarrito.findFirst({
     where: {
-        clienteId,
+        ecommerceClienteId,
         estado: client_1.EcommerceEstadoCarrito.ACTIVO,
     },
-    select: { id: true, estado: true, clienteId: true },
+    select: { id: true, estado: true, ecommerceClienteId: true },
 });
 exports.buscarCarritoActivoPorCliente = buscarCarritoActivoPorCliente;
 const actualizarCarritoEstado = (id, estado, tx) => db(tx).ecommerceCarrito.update({

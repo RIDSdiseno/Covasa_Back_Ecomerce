@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.pedidoCarritoIdSchema = exports.pedidoIdSchema = exports.pedidoDesdeCarritoSchema = exports.pedidoCrearSchema = void 0;
 const zod_1 = require("zod");
 exports.pedidoCrearSchema = zod_1.z.object({
+    ecommerceClienteId: zod_1.z.string().min(1).optional(),
     clienteId: zod_1.z.string().min(1).optional(),
     usuarioId: zod_1.z.string().min(1).optional(),
     despacho: zod_1.z

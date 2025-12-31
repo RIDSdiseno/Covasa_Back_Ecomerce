@@ -26,16 +26,16 @@ export const obtenerCarritoPorId = (id: string) =>
 export const buscarCarritoPorId = (id: string, tx?: DbClient) =>
   db(tx).ecommerceCarrito.findUnique({
     where: { id },
-    select: { id: true, estado: true, clienteId: true },
+    select: { id: true, estado: true, ecommerceClienteId: true },
   });
 
-export const buscarCarritoActivoPorCliente = (clienteId: string, tx?: DbClient) =>
+export const buscarCarritoActivoPorCliente = (ecommerceClienteId: string, tx?: DbClient) =>
   db(tx).ecommerceCarrito.findFirst({
     where: {
-      clienteId,
+      ecommerceClienteId,
       estado: EcommerceEstadoCarrito.ACTIVO,
     },
-    select: { id: true, estado: true, clienteId: true },
+    select: { id: true, estado: true, ecommerceClienteId: true },
   });
 
 export const actualizarCarritoEstado = (id: string, estado: EcommerceEstadoCarrito, tx?: DbClient) =>

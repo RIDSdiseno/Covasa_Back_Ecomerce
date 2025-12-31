@@ -139,7 +139,18 @@ const obtenerPagoReciboServicio = async (pagoId) => {
             estado: pago.pedido.estado,
             createdAt: pago.pedido.createdAt,
         },
-        direccion: pago.pedido.direccion,
+        direccion: pago.pedido.direccion
+            ? {
+                nombreContacto: pago.pedido.direccion.nombreRecibe,
+                telefono: pago.pedido.direccion.telefonoRecibe,
+                email: pago.pedido.direccion.email,
+                direccion: (0, ecommerce_utilidades_1.construirDireccionLinea)(pago.pedido.direccion.calle, pago.pedido.direccion.numero, pago.pedido.direccion.depto),
+                comuna: pago.pedido.direccion.comuna,
+                ciudad: pago.pedido.direccion.ciudad,
+                region: pago.pedido.direccion.region,
+                notas: pago.pedido.direccion.notas,
+            }
+            : null,
         transbank,
     };
 };

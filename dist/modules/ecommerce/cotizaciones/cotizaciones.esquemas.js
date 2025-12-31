@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.cotizacionIdSchema = exports.quoteCrearSchema = exports.cotizacionCrearSchema = void 0;
 const zod_1 = require("zod");
 exports.cotizacionCrearSchema = zod_1.z.object({
+    ecommerceClienteId: zod_1.z.string().min(1).optional(),
     clienteId: zod_1.z.string().min(1).optional(),
     contacto: zod_1.z.object({
         nombre: zod_1.z.string().min(1).max(200),

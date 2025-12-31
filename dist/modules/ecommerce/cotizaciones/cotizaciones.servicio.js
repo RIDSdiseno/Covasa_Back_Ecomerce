@@ -20,10 +20,11 @@ const crearCotizacionServicio = async (payload) => {
     if (faltantes.length > 0) {
         throw new errores_1.ErrorApi("Productos no encontrados", 404, { productos: faltantes });
     }
-    if (payload.clienteId) {
-        const cliente = await (0, cotizaciones_repositorio_1.buscarClientePorId)(payload.clienteId);
+    const ecommerceClienteId = payload.ecommerceClienteId;
+    if (ecommerceClienteId) {
+        const cliente = await (0, cotizaciones_repositorio_1.buscarClientePorId)(ecommerceClienteId);
         if (!cliente) {
-            throw new errores_1.ErrorApi("Cliente no encontrado", 404, { id: payload.clienteId });
+            throw new errores_1.ErrorApi("Cliente no encontrado", 404, { id: ecommerceClienteId });
         }
     }
     let subtotalNeto = 0;
@@ -60,9 +61,28 @@ const crearCotizacionServicio = async (payload) => {
         ubicacion: payload.extra?.ubicacion,
     });
     const resultado = await prisma_1.prisma.$transaction(async (tx) => {
+        const crmCotizacion = await tx.crmCotizacion.create({
+            data: {
+                clienteNombreSnapshot: (0, ecommerce_utilidades_1.normalizarTexto)(payload.contacto.nombre),
+                clienteRutSnapshot: (0, ecommerce_utilidades_1.normalizarTexto)(payload.contacto.rut) || undefined,
+                clienteEmailSnapshot: (0, ecommerce_utilidades_1.normalizarTexto)(payload.contacto.email).toLowerCase(),
+                clienteTelefonoSnapshot: (0, ecommerce_utilidades_1.normalizarTexto)(payload.contacto.telefono) || undefined,
+                nombreObra: (0, ecommerce_utilidades_1.normalizarTexto)(payload.extra?.tipoObra) || undefined,
+                numeroOC: (0, ecommerce_utilidades_1.normalizarTexto)(payload.ocCliente) || undefined,
+                observaciones,
+                subtotalNeto,
+                iva: ivaTotal,
+                total,
+                estado: client_1.CrmEstadoCotizacion.NUEVA,
+                origenCliente: client_1.OrigenCliente.CLIENTE_ECOMMERCE,
+            },
+            select: { id: true },
+        });
         const creada = await (0, cotizaciones_repositorio_1.crearCotizacion)({
             codigo: codigoTemporal,
-            cliente: payload.clienteId ? { connect: { id: payload.clienteId } } : undefined,
+            ecommerceCliente: ecommerceClienteId
+                ? { connect: { id: ecommerceClienteId } }
+                : undefined,
             nombreContacto: (0, ecommerce_utilidades_1.normalizarTexto)(payload.contacto.nombre),
             email: (0, ecommerce_utilidades_1.normalizarTexto)(payload.contacto.email).toLowerCase(),
             telefono: (0, ecommerce_utilidades_1.normalizarTexto)(payload.contacto.telefono),
@@ -73,6 +93,7 @@ const crearCotizacionServicio = async (payload) => {
             subtotalNeto,
             iva: ivaTotal,
             total,
+            crmCotizacion: { connect: { id: crmCotizacion.id } },
             items: {
                 create: itemsCrear,
             },
@@ -109,13 +130,15 @@ const convertirCotizacionACarritoServicio = async (id) => {
             throw new errores_1.ErrorApi("Cotizacion no encontrada", 404, { id });
         }
         let carritoId = null;
-        if (cotizacion.clienteId) {
-            const activo = await (0, carrito_repositorio_1.buscarCarritoActivoPorCliente)(cotizacion.clienteId, tx);
+        if (cotizacion.ecommerceClienteId) {
+            const activo = await (0, carrito_repositorio_1.buscarCarritoActivoPorCliente)(cotizacion.ecommerceClienteId, tx);
             carritoId = activo?.id ?? null;
         }
         if (!carritoId) {
             const creado = await (0, carrito_repositorio_1.crearCarrito)({
-                cliente: cotizacion.clienteId ? { connect: { id: cotizacion.clienteId } } : undefined,
+                ecommerceCliente: cotizacion.ecommerceClienteId
+                    ? { connect: { id: cotizacion.ecommerceClienteId } }
+                    : undefined,
             }, tx);
             carritoId = creado.id;
         }

@@ -6,6 +6,10 @@ const catalogo_repositorio_1 = require("./catalogo.repositorio");
 const mapearProducto = (producto) => {
     const stockDisponible = producto.Inventario.reduce((sum, item) => sum + item.stock, 0);
     const precioNeto = producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral;
+    const imagenes = producto.ProductoImagen
+        .slice()
+        .sort((a, b) => a.orden - b.orden)
+        .map((imagen) => imagen.url);
     return {
         id: producto.id,
         sku: producto.sku,
@@ -14,6 +18,7 @@ const mapearProducto = (producto) => {
         unidad: producto.unidadMedida,
         unidadMedida: producto.unidadMedida,
         fotoUrl: producto.fotoUrl,
+        imagenes,
         tipo: producto.tipo,
         precioNeto,
         precioLista: producto.precioGeneral,

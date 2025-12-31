@@ -5,7 +5,7 @@ const manejarAsync_1 = require("../../../lib/manejarAsync");
 const carrito_esquemas_1 = require("./carrito.esquemas");
 const carrito_servicio_1 = require("./carrito.servicio");
 // POST /api/ecommerce/cart
-// Input: { clienteId? }. Output: { carritoId, estado }.
+// Input: { ecommerceClienteId? }. Output: { carritoId, estado }.
 exports.crearCarrito = (0, manejarAsync_1.manejarAsync)(async (req, res) => {
     const payload = carrito_esquemas_1.carritoCrearSchema.parse(req.body);
     const carrito = await (0, carrito_servicio_1.crearCarritoServicio)(payload);

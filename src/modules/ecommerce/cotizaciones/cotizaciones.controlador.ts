@@ -13,7 +13,7 @@ export const crearCotizacion = manejarAsync(async (req: Request, res: Response) 
   const payload = cotizacionCrearSchema.parse(req.body);
 
   const resultado = await crearCotizacionServicio({
-    clienteId: payload.clienteId,
+    ecommerceClienteId: payload.ecommerceClienteId,
     contacto: {
       nombre: payload.contacto.nombre,
       email: payload.contacto.email,

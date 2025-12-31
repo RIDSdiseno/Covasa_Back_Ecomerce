@@ -12,11 +12,16 @@ type ProductoBase = {
   precioConDescto: number;
   tipo: ProductoTipo;
   Inventario: { stock: number }[];
+  ProductoImagen: { url: string; orden: number }[];
 };
 
 const mapearProducto = (producto: ProductoBase) => {
   const stockDisponible = producto.Inventario.reduce((sum, item) => sum + item.stock, 0);
   const precioNeto = producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral;
+  const imagenes = producto.ProductoImagen
+    .slice()
+    .sort((a, b) => a.orden - b.orden)
+    .map((imagen) => imagen.url);
 
   return {
     id: producto.id,
@@ -26,6 +31,7 @@ const mapearProducto = (producto: ProductoBase) => {
     unidad: producto.unidadMedida,
     unidadMedida: producto.unidadMedida,
     fotoUrl: producto.fotoUrl,
+    imagenes,
     tipo: producto.tipo,
     precioNeto,
     precioLista: producto.precioGeneral,

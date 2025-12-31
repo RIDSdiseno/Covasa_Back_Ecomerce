@@ -1,9 +1,12 @@
 ﻿import bcrypt from "bcryptjs";
 import { ErrorApi } from "../../../lib/errores";
-import { normalizarTexto } from "../ecommerce.utilidades";
+import { prisma } from "../../../lib/prisma";
+import { construirDireccionLinea, normalizarTexto } from "../ecommerce.utilidades";
 import {
   buscarClientePorEmail,
   buscarUsuarioPorEmail,
+  actualizarClienteUsuario,
+  crearCliente,
   crearUsuario,
   obtenerDireccionPrincipal,
 } from "./usuarios.repositorio";
@@ -44,19 +47,42 @@ export const registrarUsuarioServicio = async (payload: RegistroPayload) => {
     throw new ErrorApi("El email ya esta registrado", 409);
   }
 
-  const cliente = await buscarClientePorEmail(email);
   const passwordHash = await bcrypt.hash(payload.password, resolverSaltRounds());
 
-  const usuario = await crearUsuario({
-    nombre,
-    email,
-    telefono: telefono || undefined,
-    passwordHash,
-    cliente: cliente ? { connect: { id: cliente.id } } : undefined,
+  const resultado = await prisma.$transaction(async (tx) => {
+    const usuario = await crearUsuario(
+      {
+        nombre,
+        email,
+        telefono: telefono || undefined,
+        passwordHash,
+      },
+      tx
+    );
+
+    const clienteExistente = await buscarClientePorEmail(email, tx);
+    if (clienteExistente && clienteExistente.usuarioId && clienteExistente.usuarioId !== usuario.id) {
+      throw new ErrorApi("El email ya esta registrado", 409);
+    }
+
+    const cliente = clienteExistente
+      ? await actualizarClienteUsuario(clienteExistente.id, usuario.id, tx)
+      : await crearCliente(
+          {
+            nombres: nombre,
+            emailContacto: email,
+            telefono: telefono || undefined,
+            usuario: { connect: { id: usuario.id } },
+          },
+          tx
+        );
+
+    return { usuario, cliente };
   });
 
   return {
-    usuario,
+    usuario: resultado.usuario,
+    ecommerceClienteId: resultado.cliente.id,
   };
 };
 
@@ -72,7 +98,12 @@ export const loginUsuarioServicio = async (payload: LoginPayload) => {
     throw new ErrorApi("Credenciales invalidas", 401);
   }
 
-  const direccion = await obtenerDireccionPrincipal(usuario.id);
+  const ecommerceClienteId = usuario.cliente?.id ?? null;
+  const direccion = ecommerceClienteId ? await obtenerDireccionPrincipal(ecommerceClienteId) : null;
+
+  const direccionLinea = direccion
+    ? construirDireccionLinea(direccion.calle, direccion.numero, direccion.depto)
+    : "";
 
   return {
     usuario: {
@@ -80,16 +111,16 @@ export const loginUsuarioServicio = async (payload: LoginPayload) => {
       nombre: usuario.nombre,
       email: usuario.email,
       telefono: usuario.telefono,
-      clienteId: usuario.clienteId,
+      ecommerceClienteId,
       createdAt: usuario.createdAt,
     },
     direccionPrincipal: direccion
       ? {
           id: direccion.id,
-          nombreContacto: direccion.nombreContacto,
-          telefono: direccion.telefono,
+          nombreContacto: direccion.nombreRecibe,
+          telefono: direccion.telefonoRecibe,
           email: direccion.email,
-          direccion: direccion.direccion,
+          direccion: direccionLinea,
           comuna: direccion.comuna,
           ciudad: direccion.ciudad,
           region: direccion.region,

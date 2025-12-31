@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.construirObservaciones = exports.calcularTotales = exports.normalizarTexto = exports.agruparItems = exports.formatearCodigo = exports.obtenerIvaPct = void 0;
+exports.construirObservaciones = exports.calcularTotales = exports.construirDireccionLinea = exports.construirNombreCompleto = exports.normalizarTexto = exports.agruparItems = exports.formatearCodigo = exports.obtenerIvaPct = void 0;
 const errores_1 = require("../../lib/errores");
 const obtenerIvaPct = () => {
     const valor = Number(process.env.IVA_PCT ?? 19);
@@ -26,6 +26,16 @@ const agruparItems = (items) => {
 exports.agruparItems = agruparItems;
 const normalizarTexto = (valor) => (valor ?? "").trim();
 exports.normalizarTexto = normalizarTexto;
+const construirNombreCompleto = (nombres, apellidos) => {
+    const partes = [(0, exports.normalizarTexto)(nombres ?? undefined), (0, exports.normalizarTexto)(apellidos ?? undefined)].filter((valor) => valor.length > 0);
+    return partes.join(" ").trim();
+};
+exports.construirNombreCompleto = construirNombreCompleto;
+const construirDireccionLinea = (calle, numero, depto) => {
+    const partes = [(0, exports.normalizarTexto)(calle ?? undefined), (0, exports.normalizarTexto)(numero ?? undefined), (0, exports.normalizarTexto)(depto ?? undefined)].filter((valor) => valor.length > 0);
+    return partes.join(" ").trim();
+};
+exports.construirDireccionLinea = construirDireccionLinea;
 const calcularTotales = (items) => {
     const acumulado = items.reduce((acc, item) => {
         acc.subtotalNeto += item.subtotalNetoSnapshot;

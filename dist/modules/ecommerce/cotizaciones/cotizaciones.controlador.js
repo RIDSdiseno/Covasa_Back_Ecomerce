@@ -9,7 +9,7 @@ const cotizaciones_servicio_1 = require("./cotizaciones.servicio");
 exports.crearCotizacion = (0, manejarAsync_1.manejarAsync)(async (req, res) => {
     const payload = cotizaciones_esquemas_1.cotizacionCrearSchema.parse(req.body);
     const resultado = await (0, cotizaciones_servicio_1.crearCotizacionServicio)({
-        clienteId: payload.clienteId,
+        ecommerceClienteId: payload.ecommerceClienteId,
         contacto: {
             nombre: payload.contacto.nombre,
             email: payload.contacto.email,

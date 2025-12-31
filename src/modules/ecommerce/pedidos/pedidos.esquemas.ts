@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const pedidoCrearSchema = z.object({
+  ecommerceClienteId: z.string().min(1).optional(),
   clienteId: z.string().min(1).optional(),
   usuarioId: z.string().min(1).optional(),
   despacho: z

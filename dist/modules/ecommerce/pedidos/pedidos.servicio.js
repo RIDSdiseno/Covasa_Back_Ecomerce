@@ -33,17 +33,37 @@ const validarStockDisponible = async (items) => {
         });
     }
 };
-const resolverDespacho = (despacho, cliente) => {
-    const nombreCliente = normalizarNullable(cliente?.personaContacto) || normalizarNullable(cliente?.nombre);
+const resolverDespacho = (despacho, cliente, direccionPrincipal) => {
+    const nombreCliente = (0, ecommerce_utilidades_1.construirNombreCompleto)(cliente?.nombres, cliente?.apellidos);
+    const direccionPrincipalLinea = direccionPrincipal
+        ? (0, ecommerce_utilidades_1.construirDireccionLinea)(direccionPrincipal.calle, direccionPrincipal.numero, direccionPrincipal.depto)
+        : "";
     return {
-        nombre: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.nombre) || nombreCliente || undefined,
-        telefono: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.telefono) || normalizarNullable(cliente?.telefono) || undefined,
-        email: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.email) || normalizarNullable(cliente?.email) || undefined,
-        direccion: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.direccion) || normalizarNullable(cliente?.direccion) || undefined,
-        comuna: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.comuna) || normalizarNullable(cliente?.comuna) || undefined,
-        ciudad: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.ciudad) || normalizarNullable(cliente?.ciudad) || undefined,
-        region: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.region) || normalizarNullable(cliente?.region) || undefined,
-        notas: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.notas) || undefined,
+        nombre: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.nombre) ||
+            normalizarNullable(direccionPrincipal?.nombreRecibe) ||
+            nombreCliente ||
+            undefined,
+        telefono: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.telefono) ||
+            normalizarNullable(direccionPrincipal?.telefonoRecibe) ||
+            normalizarNullable(cliente?.telefono) ||
+            undefined,
+        email: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.email) ||
+            normalizarNullable(direccionPrincipal?.email) ||
+            normalizarNullable(cliente?.emailContacto) ||
+            undefined,
+        direccion: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.direccion) ||
+            normalizarNullable(direccionPrincipalLinea) ||
+            undefined,
+        comuna: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.comuna) ||
+            normalizarNullable(direccionPrincipal?.comuna) ||
+            undefined,
+        ciudad: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.ciudad) ||
+            normalizarNullable(direccionPrincipal?.ciudad) ||
+            undefined,
+        region: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.region) ||
+            normalizarNullable(direccionPrincipal?.region) ||
+            undefined,
+        notas: (0, ecommerce_utilidades_1.normalizarTexto)(despacho?.notas) || normalizarNullable(direccionPrincipal?.notas) || undefined,
     };
 };
 const validarDespachoCompleto = (despacho) => {
@@ -74,25 +94,27 @@ const resolverUsuarioEcommerce = async (usuarioId) => {
     }
     return {
         id: usuario.id,
-        clienteId: usuario.clienteId ?? null,
+        ecommerceClienteId: usuario.cliente?.id ?? null,
     };
 };
 const registrarDireccionPedido = async (datos) => {
-    if (datos.usuarioId) {
-        await (0, usuarios_repositorio_1.limpiarDireccionesPrincipales)(datos.usuarioId, datos.tx);
+    if (datos.ecommerceClienteId) {
+        await (0, usuarios_repositorio_1.limpiarDireccionesPrincipales)(datos.ecommerceClienteId, datos.tx);
     }
     return (0, usuarios_repositorio_1.crearDireccion)({
         pedido: { connect: { id: datos.pedidoId } },
-        usuario: datos.usuarioId ? { connect: { id: datos.usuarioId } } : undefined,
-        nombreContacto: datos.despacho.nombre ?? "",
-        telefono: datos.despacho.telefono ?? "",
+        ecommerceCliente: datos.ecommerceClienteId
+            ? { connect: { id: datos.ecommerceClienteId } }
+            : undefined,
+        nombreRecibe: datos.despacho.nombre ?? "",
+        telefonoRecibe: datos.despacho.telefono ?? "",
         email: datos.despacho.email ?? "",
-        direccion: datos.despacho.direccion ?? "",
+        calle: datos.despacho.direccion ?? "",
         comuna: datos.despacho.comuna ?? "",
         ciudad: datos.despacho.ciudad ?? undefined,
         region: datos.despacho.region ?? "",
         notas: datos.despacho.notas ?? undefined,
-        esPrincipal: Boolean(datos.usuarioId),
+        principal: Boolean(datos.ecommerceClienteId),
     }, datos.tx);
 };
 // Crea pedido desde items directos, calcula snapshots y notifica.
@@ -107,14 +129,16 @@ const crearPedidoServicio = async (payload) => {
         throw new errores_1.ErrorApi("Productos no encontrados", 404, { productos: faltantes });
     }
     const usuario = await resolverUsuarioEcommerce(payload.usuarioId);
-    const clienteIdFinal = payload.clienteId || usuario?.clienteId || undefined;
+    const ecommerceClienteId = payload.ecommerceClienteId ?? usuario?.ecommerceClienteId ?? undefined;
     let cliente = null;
-    if (clienteIdFinal) {
-        const encontrado = await (0, pedidos_repositorio_1.buscarClientePorId)(clienteIdFinal);
+    let direccionPrincipal = null;
+    if (ecommerceClienteId) {
+        const encontrado = await (0, pedidos_repositorio_1.buscarClientePorId)(ecommerceClienteId);
         if (!encontrado) {
-            throw new errores_1.ErrorApi("Cliente no encontrado", 404, { id: clienteIdFinal });
+            throw new errores_1.ErrorApi("Cliente no encontrado", 404, { id: ecommerceClienteId });
         }
         cliente = encontrado;
+        direccionPrincipal = await (0, usuarios_repositorio_1.obtenerDireccionPrincipal)(ecommerceClienteId);
     }
     await validarStockDisponible(itemsAgrupados);
     let subtotalNeto = 0;
@@ -143,12 +167,28 @@ const crearPedidoServicio = async (payload) => {
     });
     const total = subtotalNeto + ivaTotal;
     const codigoTemporal = `ECP-TMP-${(0, crypto_1.randomUUID)()}`;
-    const despachoFinal = resolverDespacho(payload.despacho, cliente);
+    const despachoFinal = resolverDespacho(payload.despacho, cliente, direccionPrincipal);
     validarDespachoCompleto(despachoFinal);
     const resultado = await prisma_1.prisma.$transaction(async (tx) => {
+        const crmCotizacion = await tx.crmCotizacion.create({
+            data: {
+                clienteNombreSnapshot: (0, ecommerce_utilidades_1.normalizarTexto)(despachoFinal.nombre),
+                clienteEmailSnapshot: (0, ecommerce_utilidades_1.normalizarTexto)(despachoFinal.email) || undefined,
+                clienteTelefonoSnapshot: (0, ecommerce_utilidades_1.normalizarTexto)(despachoFinal.telefono) || undefined,
+                observaciones: (0, ecommerce_utilidades_1.normalizarTexto)(despachoFinal.notas) || undefined,
+                subtotalNeto,
+                iva: ivaTotal,
+                total,
+                estado: client_1.CrmEstadoCotizacion.GANADA,
+                tipoCierre: client_1.CrmTipoCierre.COMPRA,
+                origenCliente: client_1.OrigenCliente.CLIENTE_ECOMMERCE,
+            },
+            select: { id: true },
+        });
         const creado = await (0, pedidos_repositorio_1.crearPedido)({
             codigo: codigoTemporal,
-            cliente: clienteIdFinal ? { connect: { id: clienteIdFinal } } : undefined,
+            ecommerceCliente: ecommerceClienteId ? { connect: { id: ecommerceClienteId } } : undefined,
+            crmCotizacion: { connect: { id: crmCotizacion.id } },
             despachoNombre: despachoFinal.nombre,
             despachoTelefono: despachoFinal.telefono,
             despachoEmail: despachoFinal.email,
@@ -166,7 +206,7 @@ const crearPedidoServicio = async (payload) => {
         const actualizado = await (0, pedidos_repositorio_1.actualizarCodigoPedido)(creado.id, codigoFinal, tx);
         await registrarDireccionPedido({
             pedidoId: creado.id,
-            usuarioId: payload.usuarioId,
+            ecommerceClienteId,
             despacho: despachoFinal,
             tx,
         });
@@ -218,14 +258,37 @@ const crearPedidoDesdeCarritoServicio = async (cartId, despacho, usuarioId) => {
     const totales = (0, ecommerce_utilidades_1.calcularTotales)(carrito.items);
     const codigoTemporal = `ECP-TMP-${(0, crypto_1.randomUUID)()}`;
     const usuario = await resolverUsuarioEcommerce(usuarioId);
-    const clienteIdFinal = carrito.clienteId || usuario?.clienteId || undefined;
-    const cliente = clienteIdFinal ? (await (0, pedidos_repositorio_1.buscarClientePorId)(clienteIdFinal)) : null;
-    const despachoFinal = resolverDespacho(despacho, cliente);
+    const ecommerceClienteId = carrito.ecommerceClienteId || usuario?.ecommerceClienteId || undefined;
+    const cliente = ecommerceClienteId
+        ? (await (0, pedidos_repositorio_1.buscarClientePorId)(ecommerceClienteId))
+        : null;
+    const direccionPrincipal = ecommerceClienteId
+        ? (await (0, usuarios_repositorio_1.obtenerDireccionPrincipal)(ecommerceClienteId))
+        : null;
+    const despachoFinal = resolverDespacho(despacho, cliente, direccionPrincipal);
     validarDespachoCompleto(despachoFinal);
     const resultado = await prisma_1.prisma.$transaction(async (tx) => {
+        const crmCotizacion = await tx.crmCotizacion.create({
+            data: {
+                clienteNombreSnapshot: (0, ecommerce_utilidades_1.normalizarTexto)(despachoFinal.nombre),
+                clienteEmailSnapshot: (0, ecommerce_utilidades_1.normalizarTexto)(despachoFinal.email) || undefined,
+                clienteTelefonoSnapshot: (0, ecommerce_utilidades_1.normalizarTexto)(despachoFinal.telefono) || undefined,
+                observaciones: (0, ecommerce_utilidades_1.normalizarTexto)(despachoFinal.notas) || undefined,
+                subtotalNeto: totales.subtotalNeto,
+                iva: totales.iva,
+                total: totales.total,
+                estado: client_1.CrmEstadoCotizacion.GANADA,
+                tipoCierre: client_1.CrmTipoCierre.COMPRA,
+                origenCliente: client_1.OrigenCliente.CLIENTE_ECOMMERCE,
+            },
+            select: { id: true },
+        });
         const creado = await (0, pedidos_repositorio_1.crearPedido)({
             codigo: codigoTemporal,
-            cliente: clienteIdFinal ? { connect: { id: clienteIdFinal } } : undefined,
+            ecommerceCliente: ecommerceClienteId
+                ? { connect: { id: ecommerceClienteId } }
+                : undefined,
+            crmCotizacion: { connect: { id: crmCotizacion.id } },
             despachoNombre: despachoFinal.nombre,
             despachoTelefono: despachoFinal.telefono,
             despachoEmail: despachoFinal.email,
@@ -243,7 +306,7 @@ const crearPedidoDesdeCarritoServicio = async (cartId, despacho, usuarioId) => {
         const actualizado = await (0, pedidos_repositorio_1.actualizarCodigoPedido)(creado.id, codigoFinal, tx);
         await registrarDireccionPedido({
             pedidoId: creado.id,
-            usuarioId,
+            ecommerceClienteId,
             despacho: despachoFinal,
             tx,
         });

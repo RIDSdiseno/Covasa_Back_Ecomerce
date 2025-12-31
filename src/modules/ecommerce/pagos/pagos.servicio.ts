@@ -1,7 +1,7 @@
 import { EcommerceEstadoPago, EcommerceEstadoPedido, EcommerceMetodoPago, Prisma } from "@prisma/client";
 import { ErrorApi } from "../../../lib/errores";
 import { prisma } from "../../../lib/prisma";
-import { normalizarTexto } from "../ecommerce.utilidades";
+import { construirDireccionLinea, normalizarTexto } from "../ecommerce.utilidades";
 import { registrarNotificacion } from "../notificaciones/notificaciones.servicio";
 import {
   actualizarPagoEstado,
@@ -178,7 +178,22 @@ export const obtenerPagoReciboServicio = async (pagoId: string) => {
       estado: pago.pedido.estado,
       createdAt: pago.pedido.createdAt,
     },
-    direccion: pago.pedido.direccion,
+    direccion: pago.pedido.direccion
+      ? {
+          nombreContacto: pago.pedido.direccion.nombreRecibe,
+          telefono: pago.pedido.direccion.telefonoRecibe,
+          email: pago.pedido.direccion.email,
+          direccion: construirDireccionLinea(
+            pago.pedido.direccion.calle,
+            pago.pedido.direccion.numero,
+            pago.pedido.direccion.depto
+          ),
+          comuna: pago.pedido.direccion.comuna,
+          ciudad: pago.pedido.direccion.ciudad,
+          region: pago.pedido.direccion.region,
+          notas: pago.pedido.direccion.notas,
+        }
+      : null,
     transbank,
   };
 };

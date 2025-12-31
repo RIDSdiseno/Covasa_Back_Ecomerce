@@ -20,6 +20,12 @@ export const buscarProductos = (filtros: FiltrosCatalogo) =>
           stock: true,
         },
       },
+      ProductoImagen: {
+        select: {
+          url: true,
+          orden: true,
+        },
+      },
     },
     orderBy: {
       nombre: "asc",
@@ -35,6 +41,12 @@ export const buscarProductoPorId = (id: string) =>
       Inventario: {
         select: {
           stock: true,
+        },
+      },
+      ProductoImagen: {
+        select: {
+          url: true,
+          orden: true,
         },
       },
     },
