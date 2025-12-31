@@ -14,8 +14,8 @@ export const buscarUsuarioPorEmail = (email: string, tx?: DbClient) =>
       email: true,
       telefono: true,
       passwordHash: true,
-      clienteId: true,
       createdAt: true,
+      cliente: { select: { id: true } },
     },
   });
 
@@ -27,8 +27,8 @@ export const buscarUsuarioPorId = (id: string, tx?: DbClient) =>
       nombre: true,
       email: true,
       telefono: true,
-      clienteId: true,
       createdAt: true,
+      cliente: { select: { id: true } },
     },
   });
 
@@ -40,31 +40,62 @@ export const crearUsuario = (data: Prisma.EcommerceUsuarioCreateInput, tx?: DbCl
       nombre: true,
       email: true,
       telefono: true,
-      clienteId: true,
       createdAt: true,
+      cliente: { select: { id: true } },
     },
   });
 
 export const buscarClientePorEmail = (email: string, tx?: DbClient) =>
-  db(tx).cliente.findFirst({
-    where: { email: { equals: email, mode: "insensitive" } },
+  db(tx).ecommerceCliente.findFirst({
+    where: {
+      OR: [
+        { emailContacto: { equals: email, mode: "insensitive" } },
+        { usuario: { email: { equals: email, mode: "insensitive" } } },
+      ],
+    },
     select: {
       id: true,
-      nombre: true,
-      personaContacto: true,
-      email: true,
+      usuarioId: true,
+      nombres: true,
+      apellidos: true,
+      emailContacto: true,
       telefono: true,
-      direccion: true,
-      comuna: true,
-      ciudad: true,
-      region: true,
     },
   });
 
-export const limpiarDireccionesPrincipales = (usuarioId: string, tx?: DbClient) =>
+export const crearCliente = (data: Prisma.EcommerceClienteCreateInput, tx?: DbClient) =>
+  db(tx).ecommerceCliente.create({
+    data,
+    select: {
+      id: true,
+      usuarioId: true,
+      nombres: true,
+      apellidos: true,
+      emailContacto: true,
+      telefono: true,
+      createdAt: true,
+    },
+  });
+
+export const actualizarClienteUsuario = (id: string, usuarioId: string, tx?: DbClient) =>
+  db(tx).ecommerceCliente.update({
+    where: { id },
+    data: { usuario: { connect: { id: usuarioId } } },
+    select: {
+      id: true,
+      usuarioId: true,
+      nombres: true,
+      apellidos: true,
+      emailContacto: true,
+      telefono: true,
+      createdAt: true,
+    },
+  });
+
+export const limpiarDireccionesPrincipales = (ecommerceClienteId: string, tx?: DbClient) =>
   db(tx).ecommerceDireccion.updateMany({
-    where: { usuarioId, esPrincipal: true },
-    data: { esPrincipal: false },
+    where: { ecommerceClienteId, principal: true },
+    data: { principal: false },
   });
 
 export const crearDireccion = (data: Prisma.EcommerceDireccionCreateInput, tx?: DbClient) =>
@@ -72,23 +103,26 @@ export const crearDireccion = (data: Prisma.EcommerceDireccionCreateInput, tx?: 
     data,
     select: {
       id: true,
-      usuarioId: true,
+      ecommerceClienteId: true,
       pedidoId: true,
-      nombreContacto: true,
-      telefono: true,
+      nombreRecibe: true,
+      telefonoRecibe: true,
       email: true,
-      direccion: true,
+      calle: true,
+      numero: true,
+      depto: true,
       comuna: true,
       ciudad: true,
       region: true,
+      codigoPostal: true,
       notas: true,
-      esPrincipal: true,
+      principal: true,
       createdAt: true,
     },
   });
 
-export const obtenerDireccionPrincipal = (usuarioId: string, tx?: DbClient) =>
+export const obtenerDireccionPrincipal = (ecommerceClienteId: string, tx?: DbClient) =>
   db(tx).ecommerceDireccion.findFirst({
-    where: { usuarioId, esPrincipal: true },
+    where: { ecommerceClienteId, principal: true },
     orderBy: { createdAt: "desc" },
   });

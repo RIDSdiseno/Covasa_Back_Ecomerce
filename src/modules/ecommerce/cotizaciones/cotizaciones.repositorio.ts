@@ -13,7 +13,7 @@ export const buscarProductosPorIds = (ids: string[], tx?: DbClient) =>
   });
 
 export const buscarClientePorId = (id: string, tx?: DbClient) =>
-  db(tx).cliente.findUnique({
+  db(tx).ecommerceCliente.findUnique({
     where: { id },
     select: { id: true },
   });

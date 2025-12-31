@@ -18,7 +18,7 @@ import {
 
 const mapearCarritoConTotales = (carrito: {
   id: string;
-  clienteId: string | null;
+  ecommerceClienteId: string | null;
   estado: string;
   createdAt: Date;
   updatedAt: Date;
@@ -36,25 +36,29 @@ const mapearCarritoConTotales = (carrito: {
 };
 
 // Crea un carrito ACTIVO o devuelve el activo existente para el cliente.
-export const crearCarritoServicio = async (payload: { clienteId?: string }) => {
-  if (payload.clienteId) {
-    const cliente = await prisma.cliente.findUnique({
-      where: { id: payload.clienteId },
+export const crearCarritoServicio = async (payload: {
+  ecommerceClienteId?: string;
+}) => {
+  const ecommerceClienteId = payload.ecommerceClienteId;
+
+  if (ecommerceClienteId) {
+    const cliente = await prisma.ecommerceCliente.findUnique({
+      where: { id: ecommerceClienteId },
       select: { id: true },
     });
 
     if (!cliente) {
-      throw new ErrorApi("Cliente no encontrado", 404, { id: payload.clienteId });
+      throw new ErrorApi("Cliente no encontrado", 404, { id: ecommerceClienteId });
     }
 
-    const activo = await buscarCarritoActivoPorCliente(payload.clienteId);
+    const activo = await buscarCarritoActivoPorCliente(ecommerceClienteId);
     if (activo) {
       return activo;
     }
   }
 
   return crearCarrito({
-    cliente: payload.clienteId ? { connect: { id: payload.clienteId } } : undefined,
+    ecommerceCliente: ecommerceClienteId ? { connect: { id: ecommerceClienteId } } : undefined,
   });
 };
 

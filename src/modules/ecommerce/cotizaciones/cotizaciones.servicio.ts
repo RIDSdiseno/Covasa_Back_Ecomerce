@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { EcommerceEstadoCotizacion } from "@prisma/client";
+import { CrmEstadoCotizacion, EcommerceEstadoCotizacion, OrigenCliente } from "@prisma/client";
 import { ErrorApi } from "../../../lib/errores";
 import { prisma } from "../../../lib/prisma";
 import {
@@ -28,7 +28,7 @@ import { registrarNotificacion } from "../notificaciones/notificaciones.servicio
 type ItemSolicitud = { productoId: string; cantidad: number };
 
 type CotizacionBasePayload = {
-  clienteId?: string;
+  ecommerceClienteId?: string;
   contacto: {
     nombre: string;
     email: string;
@@ -60,10 +60,11 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
     throw new ErrorApi("Productos no encontrados", 404, { productos: faltantes });
   }
 
-  if (payload.clienteId) {
-    const cliente = await buscarClientePorId(payload.clienteId);
+  const ecommerceClienteId = payload.ecommerceClienteId;
+  if (ecommerceClienteId) {
+    const cliente = await buscarClientePorId(ecommerceClienteId);
     if (!cliente) {
-      throw new ErrorApi("Cliente no encontrado", 404, { id: payload.clienteId });
+      throw new ErrorApi("Cliente no encontrado", 404, { id: ecommerceClienteId });
     }
   }
 
@@ -106,10 +107,30 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
   });
 
   const resultado = await prisma.$transaction(async (tx) => {
+    const crmCotizacion = await tx.crmCotizacion.create({
+      data: {
+        clienteNombreSnapshot: normalizarTexto(payload.contacto.nombre),
+        clienteRutSnapshot: normalizarTexto(payload.contacto.rut) || undefined,
+        clienteEmailSnapshot: normalizarTexto(payload.contacto.email).toLowerCase(),
+        clienteTelefonoSnapshot: normalizarTexto(payload.contacto.telefono) || undefined,
+        nombreObra: normalizarTexto(payload.extra?.tipoObra) || undefined,
+        numeroOC: normalizarTexto(payload.ocCliente) || undefined,
+        observaciones,
+        subtotalNeto,
+        iva: ivaTotal,
+        total,
+        estado: CrmEstadoCotizacion.NUEVA,
+        origenCliente: OrigenCliente.CLIENTE_ECOMMERCE,
+      },
+      select: { id: true },
+    });
+
     const creada = await crearCotizacion(
       {
         codigo: codigoTemporal,
-        cliente: payload.clienteId ? { connect: { id: payload.clienteId } } : undefined,
+        ecommerceCliente: ecommerceClienteId
+          ? { connect: { id: ecommerceClienteId } }
+          : undefined,
         nombreContacto: normalizarTexto(payload.contacto.nombre),
         email: normalizarTexto(payload.contacto.email).toLowerCase(),
         telefono: normalizarTexto(payload.contacto.telefono),
@@ -120,6 +141,7 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
         subtotalNeto,
         iva: ivaTotal,
         total,
+        crmCotizacion: { connect: { id: crmCotizacion.id } },
         items: {
           create: itemsCrear,
         },
@@ -166,15 +188,17 @@ export const convertirCotizacionACarritoServicio = async (id: string) => {
 
     let carritoId: string | null = null;
 
-    if (cotizacion.clienteId) {
-      const activo = await buscarCarritoActivoPorCliente(cotizacion.clienteId, tx);
+    if (cotizacion.ecommerceClienteId) {
+      const activo = await buscarCarritoActivoPorCliente(cotizacion.ecommerceClienteId, tx);
       carritoId = activo?.id ?? null;
     }
 
     if (!carritoId) {
       const creado = await crearCarrito(
         {
-          cliente: cotizacion.clienteId ? { connect: { id: cotizacion.clienteId } } : undefined,
+          ecommerceCliente: cotizacion.ecommerceClienteId
+            ? { connect: { id: cotizacion.ecommerceClienteId } }
+            : undefined,
         },
         tx
       );

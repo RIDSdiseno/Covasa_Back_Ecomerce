@@ -34,6 +34,24 @@ export const agruparItems = (items: ItemCantidad[]) => {
 
 export const normalizarTexto = (valor?: string) => (valor ?? "").trim();
 
+export const construirNombreCompleto = (nombres?: string | null, apellidos?: string | null) => {
+  const partes = [normalizarTexto(nombres ?? undefined), normalizarTexto(apellidos ?? undefined)].filter(
+    (valor) => valor.length > 0
+  );
+  return partes.join(" ").trim();
+};
+
+export const construirDireccionLinea = (
+  calle?: string | null,
+  numero?: string | null,
+  depto?: string | null
+) => {
+  const partes = [normalizarTexto(calle ?? undefined), normalizarTexto(numero ?? undefined), normalizarTexto(depto ?? undefined)].filter(
+    (valor) => valor.length > 0
+  );
+  return partes.join(" ").trim();
+};
+
 export const calcularTotales = (items: ItemTotales[]) => {
   const acumulado = items.reduce(
     (acc, item) => {

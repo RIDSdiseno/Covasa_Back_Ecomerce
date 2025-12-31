@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const cotizacionCrearSchema = z.object({
+  ecommerceClienteId: z.string().min(1).optional(),
   clienteId: z.string().min(1).optional(),
   contacto: z.object({
     nombre: z.string().min(1).max(200),

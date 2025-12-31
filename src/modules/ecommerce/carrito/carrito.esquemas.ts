@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const carritoCrearSchema = z.object({
+  ecommerceClienteId: z.string().min(1).optional(),
   clienteId: z.string().min(1).optional(),
 });
 
