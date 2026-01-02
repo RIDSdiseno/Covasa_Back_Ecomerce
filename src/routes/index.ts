@@ -4,6 +4,7 @@ import productosRouter from "./productos";
 import cotizacionesRouter from "./cotizaciones";
 import pagosRouter from "./pagos";
 import ecommerceRouter from "../modules/ecommerce";
+import crmRouter from "../modules/crm";
 
 const router = Router();
 
@@ -23,5 +24,6 @@ router.use("/products", productosRouter);
 router.use("/cotizaciones", cotizacionesRouter);
 router.use("/pagos", pagosRouter);
 router.use("/ecommerce", ecommerceRouter);
+router.use("/crm", crmRouter);
 
 export default router;

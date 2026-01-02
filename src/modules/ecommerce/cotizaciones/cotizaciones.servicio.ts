@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { CrmEstadoCotizacion, EcommerceEstadoCotizacion, OrigenCliente } from "@prisma/client";
+import { CrmEstadoCotizacion, EcommerceEstadoCotizacion, OrigenCliente, Prisma } from "@prisma/client";
 import { ErrorApi } from "../../../lib/errores";
 import { prisma } from "../../../lib/prisma";
 import {
@@ -25,19 +25,26 @@ import {
 } from "../carrito/carrito.repositorio";
 import { registrarNotificacion } from "../notificaciones/notificaciones.servicio";
 
-type ItemSolicitud = { productoId: string; cantidad: number };
+type ItemSolicitud = { productoId: string; cantidad: number; observacion?: string | null };
 
 type CotizacionBasePayload = {
   ecommerceClienteId?: string;
   contacto: {
     nombre: string;
-    email: string;
-    telefono: string;
-    empresa?: string;
-    rut?: string;
+    email?: string | null;
+    telefono?: string | null;
+    empresa?: string | null;
+    rut?: string | null;
+    direccion?: string | null;
+    mensaje?: string | null;
   };
   observaciones?: string;
   ocCliente?: string;
+  origen?: string;
+  metadata?: {
+    userAgent?: string | null;
+    utm?: Record<string, unknown> | null;
+  } | null;
   extra?: {
     tipoObra?: string;
     comunaRegion?: string;
@@ -54,6 +61,27 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
   const ids = itemsAgrupados.map((item) => item.productoId);
   const productos = await buscarProductosPorIds(ids);
   const productosPorId = new Map(productos.map((producto) => [producto.id, producto]));
+  const nombreContacto = normalizarTexto(payload.contacto.nombre);
+  const emailNormalizado = normalizarTexto(payload.contacto.email ?? undefined);
+  const email = emailNormalizado ? emailNormalizado.toLowerCase() : undefined;
+  const telefono = normalizarTexto(payload.contacto.telefono ?? undefined) || undefined;
+  const empresa = normalizarTexto(payload.contacto.empresa ?? undefined) || undefined;
+  const rut = normalizarTexto(payload.contacto.rut ?? undefined) || undefined;
+  const direccion = normalizarTexto(payload.contacto.direccion ?? undefined);
+  const mensaje = normalizarTexto(payload.contacto.mensaje ?? undefined);
+  const origen = normalizarTexto(payload.origen ?? undefined) || "ECOMMERCE";
+  const metadataUtm = payload.metadata?.utm ?? undefined;
+  const metadataUserAgent = normalizarTexto(payload.metadata?.userAgent ?? undefined);
+  const metadata = (() => {
+    const data: Record<string, Prisma.InputJsonValue> = {};
+    if (metadataUserAgent) {
+      data.userAgent = metadataUserAgent;
+    }
+    if (metadataUtm && Object.keys(metadataUtm).length > 0) {
+      data.utm = metadataUtm as Prisma.InputJsonValue;
+    }
+    return Object.keys(data).length > 0 ? (data as Prisma.InputJsonObject) : undefined;
+  })();
 
   const faltantes = ids.filter((id) => !productosPorId.has(id));
   if (faltantes.length > 0) {
@@ -80,14 +108,18 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
     const subtotal = precioNeto * item.cantidad;
     const ivaMonto = Math.round((subtotal * ivaPct) / 100);
     const total = subtotal + ivaMonto;
+    const observacion = normalizarTexto(item.observacion ?? undefined);
 
     subtotalNeto += subtotal;
     ivaTotal += ivaMonto;
 
     return {
       producto: { connect: { id: item.productoId } },
+      skuSnapshot: producto.sku ?? undefined,
       descripcionSnapshot: producto.nombre,
+      unidadSnapshot: producto.unidadMedida,
       cantidad: item.cantidad,
+      observacion: observacion || undefined,
       precioUnitarioNetoSnapshot: precioNeto,
       subtotalNetoSnapshot: subtotal,
       ivaPctSnapshot: ivaPct,
@@ -100,6 +132,8 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
   const codigoTemporal = `ECQ-TMP-${randomUUID()}`;
   const observaciones = construirObservaciones({
     observaciones: payload.observaciones,
+    direccion,
+    mensaje,
     tipoObra: payload.extra?.tipoObra,
     comunaRegion: payload.extra?.comunaRegion,
     detalleAdicional: payload.extra?.detalleAdicional,
@@ -109,10 +143,10 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
   const resultado = await prisma.$transaction(async (tx) => {
     const crmCotizacion = await tx.crmCotizacion.create({
       data: {
-        clienteNombreSnapshot: normalizarTexto(payload.contacto.nombre),
-        clienteRutSnapshot: normalizarTexto(payload.contacto.rut) || undefined,
-        clienteEmailSnapshot: normalizarTexto(payload.contacto.email).toLowerCase(),
-        clienteTelefonoSnapshot: normalizarTexto(payload.contacto.telefono) || undefined,
+        clienteNombreSnapshot: nombreContacto,
+        clienteRutSnapshot: rut || undefined,
+        clienteEmailSnapshot: email || undefined,
+        clienteTelefonoSnapshot: telefono || undefined,
         nombreObra: normalizarTexto(payload.extra?.tipoObra) || undefined,
         numeroOC: normalizarTexto(payload.ocCliente) || undefined,
         observaciones,
@@ -128,19 +162,21 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
     const creada = await crearCotizacion(
       {
         codigo: codigoTemporal,
+        origen,
         ecommerceCliente: ecommerceClienteId
           ? { connect: { id: ecommerceClienteId } }
           : undefined,
-        nombreContacto: normalizarTexto(payload.contacto.nombre),
-        email: normalizarTexto(payload.contacto.email).toLowerCase(),
-        telefono: normalizarTexto(payload.contacto.telefono),
-        empresa: normalizarTexto(payload.contacto.empresa) || undefined,
-        rut: normalizarTexto(payload.contacto.rut) || undefined,
+        nombreContacto,
+        email: email || undefined,
+        telefono: telefono || undefined,
+        empresa: empresa || undefined,
+        rut: rut || undefined,
         observaciones,
         ocCliente: normalizarTexto(payload.ocCliente) || undefined,
         subtotalNeto,
         iva: ivaTotal,
         total,
+        metadata,
         crmCotizacion: { connect: { id: crmCotizacion.id } },
         items: {
           create: itemsCrear,
@@ -157,9 +193,9 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
       referenciaTabla: "EcommerceCotizacion",
       referenciaId: creada.id,
       titulo: "Nueva cotizacion ecommerce",
-      detalle: `Contacto ${normalizarTexto(payload.contacto.nombre)} (${normalizarTexto(
-        payload.contacto.email
-      )}). Items ${itemsCrear.length}. Total ${total}.`,
+      detalle: `Contacto ${nombreContacto} (${email || "sin email"}${telefono ? ` / ${telefono}` : ""}). Items ${
+        itemsCrear.length
+      }. Total ${total}.`,
       tx,
     });
 

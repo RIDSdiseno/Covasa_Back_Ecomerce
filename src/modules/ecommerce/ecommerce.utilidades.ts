@@ -68,12 +68,16 @@ export const calcularTotales = (items: ItemTotales[]) => {
 
 export const construirObservaciones = (datos: {
   observaciones?: string;
+  direccion?: string;
+  mensaje?: string;
   tipoObra?: string;
   comunaRegion?: string;
   detalleAdicional?: string;
   ubicacion?: string;
 }) => {
   const observaciones = normalizarTexto(datos.observaciones);
+  const direccion = normalizarTexto(datos.direccion);
+  const mensaje = normalizarTexto(datos.mensaje);
   const tipoObra = normalizarTexto(datos.tipoObra);
   const comunaRegion = normalizarTexto(datos.comunaRegion);
   const detalleAdicional = normalizarTexto(datos.detalleAdicional);
@@ -82,6 +86,8 @@ export const construirObservaciones = (datos: {
   const payload: Record<string, string> = {};
 
   if (observaciones) payload.observaciones = observaciones;
+  if (direccion) payload.direccion = direccion;
+  if (mensaje) payload.mensaje = mensaje;
   if (tipoObra) payload.tipoObra = tipoObra;
   if (comunaRegion) payload.comunaRegion = comunaRegion;
   if (detalleAdicional) payload.detalleAdicional = detalleAdicional;

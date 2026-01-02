@@ -345,12 +345,13 @@ model EcommerceCotizacion {
   correlativo             Int                       @default(autoincrement())
   codigo                  String                    @unique
   origen                  String                    @default("ECOMMERCE")
+  metadata                Json?
   ecommerceClienteId      String?
   // Legacy CRM clienteId. No relation is defined to keep CRM isolated.
   clienteId               String?
   nombreContacto          String
-  email                   String
-  telefono                String
+  email                   String?
+  telefono                String?
   empresa                 String?
   rut                     String?
   observaciones           String?
@@ -376,8 +377,11 @@ model EcommerceCotizacionItem {
   id                         String              @id @default(uuid())
   cotizacionId               String
   productoId                 String
+  skuSnapshot                String?
   descripcionSnapshot        String
+  unidadSnapshot             String?
   cantidad                   Int
+  observacion                String?
   precioUnitarioNetoSnapshot Int
   subtotalNetoSnapshot       Int
   ivaPctSnapshot             Int
@@ -533,6 +537,7 @@ enum EcommerceEstadoPedido {
 enum EcommerceMetodoPago {
   TRANSBANK
   APPLE_PAY
+  APPLEPAY_DEV
   TRANSFERENCIA
   OTRO
 }

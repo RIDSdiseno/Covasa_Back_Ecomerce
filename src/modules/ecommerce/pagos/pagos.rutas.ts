@@ -7,12 +7,15 @@ import {
   recibirRetornoTransbank,
 } from "./transbank.controlador";
 import { crearMercadoPago } from "./mercadopago.controlador";
+import { crearApplePayDevIntent } from "./applePayDev.controlador";
+import { requireApplePayDevEnabled } from "../../../middleware/requireApplePayDevEnabled";
 
 const router = Router();
 
 router.post("/", crearPago);
 router.post("/mercadopago", crearMercadoPago);
 router.post("/transbank", crearTransbankPago);
+router.post("/applepay-dev/create-intent", requireApplePayDevEnabled, crearApplePayDevIntent);
 router.get("/:id", obtenerPagoRecibo);
 router.post("/transbank/return", recibirRetornoTransbank);
 router.get("/transbank/return", recibirRetornoTransbank);

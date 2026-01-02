@@ -7,7 +7,13 @@ import { listarProductosCatalogo, obtenerProductoCatalogo } from "./catalogo.ser
 // Inputs: query q/tipo/limit/offset. Output: lista de productos con precios y stock.
 export const listarProductos = manejarAsync(async (req: Request, res: Response) => {
   const query = catalogoQuerySchema.parse(req.query);
-  const productos = await listarProductosCatalogo(query);
+  const q = query.q ?? query.search;
+  const productos = await listarProductosCatalogo({
+    q,
+    tipo: query.tipo,
+    limit: query.limit,
+    offset: query.offset,
+  });
   res.json({ ok: true, data: productos });
 });
 

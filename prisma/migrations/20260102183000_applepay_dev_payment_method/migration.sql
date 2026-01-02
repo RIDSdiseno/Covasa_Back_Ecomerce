@@ -1,0 +1,1 @@
+ALTER TYPE "EcommerceMetodoPago" ADD VALUE 'APPLEPAY_DEV';

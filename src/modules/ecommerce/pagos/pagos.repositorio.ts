@@ -1,4 +1,9 @@
-import { EcommerceEstadoPago, EcommerceEstadoPedido, Prisma, PrismaClient } from "@prisma/client";
+import {
+  EcommerceEstadoPago,
+  EcommerceEstadoPedido,
+  Prisma,
+  PrismaClient,
+} from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
@@ -19,6 +24,7 @@ export const buscarPedidoParaPago = (id: string, tx?: DbClient) =>
       codigo: true,
       total: true,
       estado: true,
+      ecommerceClienteId: true,
     },
   });
 
