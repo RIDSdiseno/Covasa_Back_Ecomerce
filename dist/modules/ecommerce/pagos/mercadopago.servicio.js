@@ -72,12 +72,12 @@ const crearMercadoPagoServicio = async (payload) => {
         });
     }
     catch (error) {
-        throw new errores_1.ErrorApi("No fue posible crear preferencia Mercado Pago", 502, { error });
+        throw new errores_1.ErrorApi("No fue posible crear preferencia Mercado Pago", 502);
     }
     const preferenceId = (0, ecommerce_utilidades_1.normalizarTexto)(respuesta?.id);
     const initPoint = (0, ecommerce_utilidades_1.normalizarTexto)(respuesta?.init_point || respuesta?.sandbox_init_point);
     if (!preferenceId || !initPoint) {
-        throw new errores_1.ErrorApi("Respuesta Mercado Pago invalida", 502, { respuesta });
+        throw new errores_1.ErrorApi("Respuesta Mercado Pago invalida", 502);
     }
     const preferencePayload = JSON.parse(JSON.stringify(respuesta));
     const gatewayPayload = {

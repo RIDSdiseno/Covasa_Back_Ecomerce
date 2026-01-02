@@ -51,7 +51,10 @@ const registrarUsuarioServicio = async (payload) => {
         return { usuario, cliente };
     });
     return {
-        usuario: resultado.usuario,
+        usuario: {
+            ...resultado.usuario,
+            ecommerceClienteId: resultado.cliente.id,
+        },
         ecommerceClienteId: resultado.cliente.id,
     };
 };

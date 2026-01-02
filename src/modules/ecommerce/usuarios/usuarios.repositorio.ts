@@ -6,8 +6,8 @@ type DbClient = PrismaClient | Prisma.TransactionClient;
 const db = (tx?: DbClient) => tx ?? prisma;
 
 export const buscarUsuarioPorEmail = (email: string, tx?: DbClient) =>
-  db(tx).ecommerceUsuario.findUnique({
-    where: { email },
+  db(tx).ecommerceUsuario.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
     select: {
       id: true,
       nombre: true,

@@ -19,6 +19,7 @@ router.get("/", (_req, res) => {
     });
 });
 router.get("/health", healthController_1.healthCheck);
+router.post("/health/auth", healthController_1.healthAuth);
 router.use("/productos", productos_1.default);
 router.use("/products", productos_1.default);
 router.use("/cotizaciones", cotizaciones_1.default);

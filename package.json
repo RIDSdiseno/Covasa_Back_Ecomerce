@@ -13,7 +13,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "prebuild": "prisma generate"
+    "prebuild": "prisma generate",
+    "db:diagnostico": "ts-node src/scripts/diagnostico-db.ts",
+    "seed:ecommerce-usuarios": "ts-node src/scripts/seed-ecommerce-usuarios.ts"
   },
   "dependencies": {
     "@mercadopago/sdk-react": "^1.0.7",

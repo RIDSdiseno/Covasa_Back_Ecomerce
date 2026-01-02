@@ -21,6 +21,12 @@ const enmascararToken = (token) => {
     }
     return `${token.slice(0, 4)}****${token.slice(-4)}`;
 };
+const resumirError = (error) => {
+    if (error instanceof Error) {
+        return { name: error.name, message: error.message };
+    }
+    return { message: String(error) };
+};
 const logTransbank = (mensaje, datos) => {
     console.log(`[Transbank] ${mensaje}`, datos);
 };
@@ -81,11 +87,11 @@ const crearTransbankPagoServicio = async (payload) => {
         respuesta = (await cliente.create(buyOrder, sessionId, pedido.total, returnUrl));
     }
     catch (error) {
-        logTransbank("create_error", { pedidoId: pedido.id, error });
-        throw new errores_1.ErrorApi("No fue posible crear la transaccion Transbank", 502, { error });
+        logTransbank("create_error", { pedidoId: pedido.id, error: resumirError(error) });
+        throw new errores_1.ErrorApi("No fue posible crear la transaccion Transbank", 502);
     }
     if (!respuesta?.token || !respuesta?.url) {
-        throw new errores_1.ErrorApi("Respuesta Transbank invalida", 502, { respuesta });
+        throw new errores_1.ErrorApi("Respuesta Transbank invalida", 502);
     }
     logTransbank("create_ok", {
         pedidoId: pedido.id,
@@ -159,9 +165,9 @@ const confirmarTransbankPagoServicio = async (token) => {
             pagoId: pago.id,
             pedidoId: pago.pedidoId,
             token: enmascararToken(token),
-            error,
+            error: resumirError(error),
         });
-        throw new errores_1.ErrorApi("No fue posible confirmar la transaccion Transbank", 502, { error });
+        throw new errores_1.ErrorApi("No fue posible confirmar la transaccion Transbank", 502);
     }
     const status = String(respuesta?.status ?? "");
     const aprobado = status === "AUTHORIZED";
@@ -206,8 +212,8 @@ const obtenerEstadoTransbankServicio = async (token) => {
         return (await cliente.status(token));
     }
     catch (error) {
-        logTransbank("status_error", { token: enmascararToken(token), error });
-        throw new errores_1.ErrorApi("No fue posible consultar estado Transbank", 502, { error });
+        logTransbank("status_error", { token: enmascararToken(token), error: resumirError(error) });
+        throw new errores_1.ErrorApi("No fue posible consultar estado Transbank", 502);
     }
 };
 exports.obtenerEstadoTransbankServicio = obtenerEstadoTransbankServicio;

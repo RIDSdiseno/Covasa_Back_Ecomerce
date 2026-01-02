@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { healthCheck } from "../controllers/healthController";
+import { healthAuth, healthCheck } from "../controllers/healthController";
 import productosRouter from "./productos";
 import cotizacionesRouter from "./cotizaciones";
 import pagosRouter from "./pagos";
@@ -17,6 +17,7 @@ router.get("/", (_req, res) => {
 });
 
 router.get("/health", healthCheck);
+router.post("/health/auth", healthAuth);
 router.use("/productos", productosRouter);
 router.use("/products", productosRouter);
 router.use("/cotizaciones", cotizacionesRouter);

@@ -3,8 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.obtenerDireccionPrincipal = exports.crearDireccion = exports.limpiarDireccionesPrincipales = exports.actualizarClienteUsuario = exports.crearCliente = exports.buscarClientePorEmail = exports.crearUsuario = exports.buscarUsuarioPorId = exports.buscarUsuarioPorEmail = void 0;
 const prisma_1 = require("../../../lib/prisma");
 const db = (tx) => tx ?? prisma_1.prisma;
-const buscarUsuarioPorEmail = (email, tx) => db(tx).ecommerceUsuario.findUnique({
-    where: { email },
+const buscarUsuarioPorEmail = (email, tx) => db(tx).ecommerceUsuario.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
     select: {
         id: true,
         nombre: true,

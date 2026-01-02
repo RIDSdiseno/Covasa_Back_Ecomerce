@@ -89,13 +89,13 @@ export const crearMercadoPagoServicio = async (payload: { pedidoId: string }) =>
       },
     });
   } catch (error) {
-    throw new ErrorApi("No fue posible crear preferencia Mercado Pago", 502, { error });
+    throw new ErrorApi("No fue posible crear preferencia Mercado Pago", 502);
   }
 
   const preferenceId = normalizarTexto(respuesta?.id);
   const initPoint = normalizarTexto(respuesta?.init_point || respuesta?.sandbox_init_point);
   if (!preferenceId || !initPoint) {
-    throw new ErrorApi("Respuesta Mercado Pago invalida", 502, { respuesta });
+    throw new ErrorApi("Respuesta Mercado Pago invalida", 502);
   }
 
   const preferencePayload = JSON.parse(JSON.stringify(respuesta)) as Prisma.InputJsonValue;

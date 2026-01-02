@@ -22,6 +22,31 @@ const enmascararToken = (token) => {
     }
     return `${token.slice(0, 4)}****${token.slice(-4)}`;
 };
+const resumirError = (error) => {
+    if (error instanceof Error) {
+        return { name: error.name, message: error.message };
+    }
+    return { message: String(error) };
+};
+const mapearRespuestaTransbank = (payload) => {
+    if (!payload || typeof payload !== "object") {
+        return null;
+    }
+    const data = payload;
+    const cardDetail = data.card_detail || {};
+    const rawCard = typeof cardDetail.card_number === "string" ? cardDetail.card_number : "";
+    const cardNumber = rawCard ? `****${rawCard.slice(-4)}` : undefined;
+    return {
+        status: typeof data.status === "string" ? data.status : undefined,
+        buyOrder: typeof data.buy_order === "string" ? data.buy_order : undefined,
+        authorizationCode: typeof data.authorization_code === "string" ? data.authorization_code : undefined,
+        paymentTypeCode: typeof data.payment_type_code === "string" ? data.payment_type_code : undefined,
+        installmentsNumber: typeof data.installments_number === "number" ? data.installments_number : undefined,
+        responseCode: typeof data.response_code === "number" ? data.response_code : undefined,
+        transactionDate: typeof data.transaction_date === "string" ? data.transaction_date : undefined,
+        cardNumber,
+    };
+};
 const obtenerFrontUrlBase = () => {
     const desdeEnv = (0, ecommerce_utilidades_1.normalizarTexto)(process.env.ECOMMERCE_FRONT_URL);
     return desdeEnv || "http://localhost:5173";
@@ -82,16 +107,17 @@ exports.crearTransbankPago = (0, manejarAsync_1.manejarAsync)(async (req, res) =
     });
 });
 // POST /api/ecommerce/payments/transbank/commit
-// Input: { token } o token_ws. Output: estado y respuesta Transbank.
+// Input: { token } o token_ws. Output: estado y resumen Transbank (sin token).
 exports.confirmarTransbankPago = (0, manejarAsync_1.manejarAsync)(async (req, res) => {
     const token = extraerToken(req);
     const resultado = await (0, transbank_servicio_1.confirmarTransbankPagoServicio)(token);
+    const transbank = mapearRespuestaTransbank(resultado.resultado);
     res.json({
         ok: true,
         data: {
             pagoId: resultado.pago.id,
             estado: resultado.estado,
-            transbank: resultado.resultado,
+            transbank,
         },
         message: resultado.estado === "CONFIRMADO" ? "Pago confirmado" : "Pago rechazado",
     });
@@ -103,7 +129,7 @@ exports.obtenerEstadoTransbank = (0, manejarAsync_1.manejarAsync)(async (req, re
     const estado = await (0, transbank_servicio_1.obtenerEstadoTransbankServicio)(token);
     res.json({
         ok: true,
-        data: estado,
+        data: mapearRespuestaTransbank(estado),
     });
 });
 // POST|GET /api/ecommerce/payments/transbank/return
@@ -114,7 +140,7 @@ exports.recibirRetornoTransbank = (0, manejarAsync_1.manejarAsync)(async (req, r
         token = extraerToken(req);
     }
     catch (error) {
-        console.log("[Transbank] return_token_invalido", { error });
+        console.log("[Transbank] return_token_invalido", { error: resumirError(error) });
         const redirectUrl = construirUrlResultadoFront({ estado: "ERROR" });
         res.redirect(302, redirectUrl);
         return;
@@ -130,7 +156,7 @@ exports.recibirRetornoTransbank = (0, manejarAsync_1.manejarAsync)(async (req, r
         return;
     }
     catch (error) {
-        console.log("[Transbank] return_error", { token: enmascararToken(token), error });
+        console.log("[Transbank] return_error", { token: enmascararToken(token), error: resumirError(error) });
         const pago = await (0, pagos_repositorio_1.buscarPagoPorReferencia)(token).catch(() => null);
         const redirectUrl = construirUrlResultadoFront({
             pagoId: pago?.id,
