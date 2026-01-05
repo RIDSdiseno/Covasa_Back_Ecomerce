@@ -12,6 +12,8 @@ const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const app = (0, express_1.default)();
 const defaultAllowedOrigins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ];
@@ -43,6 +45,7 @@ app.options("*", (_req, res) => {
 const uploadsDir = path_1.default.join(__dirname, "..", "uploads");
 fs_1.default.mkdirSync(uploadsDir, { recursive: true });
 app.use("/uploads", express_1.default.static(uploadsDir));
+app.use(express_1.default.urlencoded({ extended: true }));
 app.use(express_1.default.json());
 app.use("/api", routes_1.default);
 app.use(notFound_1.notFound);

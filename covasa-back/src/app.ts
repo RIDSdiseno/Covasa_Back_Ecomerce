@@ -9,6 +9,8 @@ import fs from "fs";
 const app = express();
 
 const defaultAllowedOrigins = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
 ];
@@ -51,6 +53,7 @@ const uploadsDir = path.join(__dirname, "..", "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
 app.use("/uploads", express.static(uploadsDir));
 
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use("/api", routes);
 
