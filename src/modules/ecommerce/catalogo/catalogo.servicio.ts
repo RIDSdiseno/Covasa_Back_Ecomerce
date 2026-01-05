@@ -11,12 +11,12 @@ type ProductoBase = {
   precioGeneral: number;
   precioConDescto: number;
   tipo: ProductoTipo;
-  Inventario: { stock: number }[];
+  Inventario: { stock: number } | null;
   ProductoImagen: { url: string; orden: number }[];
 };
 
 const mapearProducto = (producto: ProductoBase) => {
-  const stockDisponible = producto.Inventario.reduce((sum, item) => sum + item.stock, 0);
+  const stockDisponible = producto.Inventario?.stock ?? 0;
   const precioNeto = producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral;
   const imagenes = producto.ProductoImagen
     .slice()

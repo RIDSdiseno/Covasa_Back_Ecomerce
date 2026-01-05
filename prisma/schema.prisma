@@ -6,27 +6,23 @@ datasource db {
   provider = "postgresql"
 }
 
-// Connection URL lives in prisma.config.ts (Prisma 7).
-
-// CRM (B2B) master tables. Keep ecommerce out of this model.
 model Cliente {
-  id                  String                @id
-  nombre              String
-  rut                 String?
-  email               String?
-  telefono            String?
-  estado              ClientStatus          @default(Activo)
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime
-  ciudad              String?
-  comuna              String?
-  direccion           String?
-  personaContacto     String?
-  region              String?
-  lineaCredito        Int                   @default(0)
-  // Legacy CRM column; ignored to avoid mixing ecommerce in Prisma Client.
-  metodoPagoUnico     EcommerceMetodoPago?  @ignore
-  vendedorId          String?
+  id              String               @id
+  nombre          String
+  rut             String?
+  email           String?
+  telefono        String?
+  estado          ClientStatus         @default(Activo)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime
+  ciudad          String?
+  comuna          String?
+  direccion       String?
+  personaContacto String?
+  region          String?
+  lineaCredito    Int                  @default(0)
+  metodoPagoUnico EcommerceMetodoPago? @ignore
+  vendedorId      String?
 
   @@index([nombre])
   @@index([rut])
@@ -34,7 +30,7 @@ model Cliente {
 
 model FleteTarifa {
   id          String   @id
-  nombre      String
+  nombre      String   @unique
   zona        String?
   destino     String?
   precio      Int      @default(0)
@@ -44,7 +40,6 @@ model FleteTarifa {
   updatedAt   DateTime
 
   @@index([activo])
-  @@index([nombre])
   @@index([zona])
 }
 
@@ -75,13 +70,14 @@ model ImportLote {
 
 model Inventario {
   id                String             @id
-  productoId        String
-  codigo            String?
+  productoId        String             @unique
+  codigo            String?            @unique
   stock             Int                @default(0)
   minimo            Int                @default(0)
   ubicacion         String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime
+  invNumero         Int                @unique @default(autoincrement())
   Producto          Producto           @relation(fields: [productoId], references: [id], onDelete: Cascade)
   StockAlert        StockAlert[]
   StockCriticalRule StockCriticalRule?
@@ -121,12 +117,13 @@ model Producto {
   updatedAt               DateTime
   tipo                    ProductoTipo              @default(Producto)
   fotoPublicId            String?
+  skuNumero               Int                       @unique @default(autoincrement())
+  Inventario              Inventario?
+  PrecioProveedor         PrecioProveedor[]
+  ProductoImagen          ProductoImagen[]
   EcommerceCarritoItem    EcommerceCarritoItem[]
   EcommerceCotizacionItem EcommerceCotizacionItem[]
   EcommercePedidoItem     EcommercePedidoItem[]
-  Inventario              Inventario[]
-  PrecioProveedor         PrecioProveedor[]
-  ProductoImagen          ProductoImagen[]
 
   @@index([nombre])
   @@index([tipo])
@@ -211,34 +208,32 @@ model ProductoImagen {
 }
 
 model CrmCotizacion {
-  id                      String              @id @default(uuid())
-  clienteId               String?
-  clienteNombreSnapshot   String
-  clienteRutSnapshot      String?
-  clienteEmailSnapshot    String?
-  clienteTelefonoSnapshot String?
-  nombreObra              String?
-  numeroOC                String?
-  observaciones           String?
-  subtotalNeto            Int
-  iva                     Int
-  total                   Int
-  estado                  CrmEstadoCotizacion @default(NUEVA)
-  tipoCierre              CrmTipoCierre?
-  // Set explicitly from ecommerce or CRM flows; legacy rows may be null.
-  origenCliente           OrigenCliente?
-  vendedorId              String?
-  createdAt               DateTime            @default(now())
-  updatedAt               DateTime            @updatedAt
-  ecommerceCotizacion     EcommerceCotizacion?
-  // CRM mirror can link to multiple ecommerce pedidos if needed.
-  ecommercePedidos        EcommercePedido[]
+  id                       String               @id @default(uuid())
+  clienteId                String?
+  clienteNombreSnapshot    String
+  clienteRutSnapshot       String?
+  clienteEmailSnapshot     String?
+  clienteTelefonoSnapshot  String?
+  nombreObra               String?
+  numeroOC                 String?
+  observaciones            String?
+  subtotalNeto             Int
+  iva                      Int
+  total                    Int
+  estado                   CrmEstadoCotizacion  @default(NUEVA)
+  tipoCierre               CrmTipoCierre?
+  vendedorId               String?
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  origenCliente            OrigenCliente?
+  clienteDireccionSnapshot String?
+  ecommerceCotizacion      EcommerceCotizacion?
+  ecommercePedidos         EcommercePedido[]
 
   @@index([createdAt])
   @@index([estado])
 }
 
-// Ecommerce (B2C) accounts and addresses.
 model EcommerceUsuario {
   id           String            @id @default(uuid())
   nombre       String
@@ -254,35 +249,34 @@ model EcommerceUsuario {
 }
 
 model EcommerceCliente {
-  id            String               @id @default(uuid())
-  // Optional link to login user for guest checkout support.
-  usuarioId     String?              @unique
+  id            String                @id @default(uuid())
+  usuarioId     String?               @unique
   tipo          EcommerceClienteTipo?
   rut           String?
-  nombres       String               @map("nombre")
+  nombres       String                @map("nombre")
   apellidos     String?
-  emailContacto String               @unique @map("email")
+  emailContacto String                @unique @map("email")
   telefono      String?
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
-  usuario       EcommerceUsuario?    @relation(fields: [usuarioId], references: [id])
-  direcciones   EcommerceDireccion[]
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
   carritos      EcommerceCarrito[]
+  usuario       EcommerceUsuario?     @relation(fields: [usuarioId], references: [id])
   cotizaciones  EcommerceCotizacion[]
+  direcciones   EcommerceDireccion[]
   pedidos       EcommercePedido[]
 
   @@map("ecommerce_cliente")
 }
 
 model EcommerceDireccion {
-  id                 String           @id @default(uuid())
+  id                 String            @id @default(uuid())
   ecommerceClienteId String?
-  pedidoId           String?          @unique
+  pedidoId           String?           @unique
   etiqueta           String?
-  nombreRecibe       String           @map("nombreContacto")
-  telefonoRecibe     String           @map("telefono")
+  nombreRecibe       String            @map("nombreContacto")
+  telefonoRecibe     String            @map("telefono")
   email              String
-  calle              String           @map("direccion")
+  calle              String            @map("direccion")
   numero             String?
   depto              String?
   comuna             String
@@ -290,34 +284,31 @@ model EcommerceDireccion {
   region             String
   codigoPostal       String?
   notas              String?
-  // Only one principal per ecommerceClienteId is enforced in code.
-  principal          Boolean          @default(false) @map("esPrincipal")
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  principal          Boolean           @default(false) @map("esPrincipal")
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
   ecommerceCliente   EcommerceCliente? @relation(fields: [ecommerceClienteId], references: [id])
   pedido             EcommercePedido?  @relation("PedidoDireccion", fields: [pedidoId], references: [id], onDelete: Cascade)
 
-  @@map("ecommerce_direccion")
   @@index([ecommerceClienteId])
   @@index([ecommerceClienteId, principal])
+  @@map("ecommerce_direccion")
 }
 
-// Ecommerce (B2C) transactional tables.
 model EcommerceCarrito {
-  id                   String                 @id @default(uuid())
-  ecommerceClienteId   String?
-  // Legacy CRM clienteId. No relation is defined to keep CRM isolated.
-  clienteId            String?
-  estado               EcommerceEstadoCarrito @default(ACTIVO)
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
-  ecommerceCliente     EcommerceCliente?      @relation(fields: [ecommerceClienteId], references: [id])
-  items                EcommerceCarritoItem[]
+  id                 String                 @id @default(uuid())
+  ecommerceClienteId String?
+  clienteId          String?
+  estado             EcommerceEstadoCarrito @default(ACTIVO)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  ecommerceCliente   EcommerceCliente?      @relation(fields: [ecommerceClienteId], references: [id])
+  items              EcommerceCarritoItem[]
 
-  @@map("ecommerce_carrito")
   @@index([ecommerceClienteId])
   @@index([clienteId], map: "ecommerce_carrito_clienteId_legacy_idx")
   @@index([estado])
+  @@map("ecommerce_carrito")
 }
 
 model EcommerceCarritoItem {
@@ -334,43 +325,50 @@ model EcommerceCarritoItem {
   carrito                    EcommerceCarrito @relation(fields: [carritoId], references: [id], onDelete: Cascade)
   producto                   Producto         @relation(fields: [productoId], references: [id])
 
-  @@map("ecommerce_carrito_item")
   @@unique([carritoId, productoId])
   @@index([carritoId])
   @@index([productoId])
+  @@map("ecommerce_carrito_item")
 }
 
 model EcommerceCotizacion {
-  id                      String                    @id @default(uuid())
-  correlativo             Int                       @default(autoincrement())
-  codigo                  String                    @unique
-  origen                  String                    @default("ECOMMERCE")
-  metadata                Json?
-  ecommerceClienteId      String?
-  // Legacy CRM clienteId. No relation is defined to keep CRM isolated.
-  clienteId               String?
-  nombreContacto          String
-  email                   String?
-  telefono                String?
-  empresa                 String?
-  rut                     String?
-  observaciones           String?
-  ocCliente               String?
-  subtotalNeto            Int
-  iva                     Int
-  total                   Int
-  estado                  EcommerceEstadoCotizacion @default(NUEVA)
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
-  crmCotizacionId         String?                   @unique
-  ecommerceCliente        EcommerceCliente?         @relation(fields: [ecommerceClienteId], references: [id])
-  crmCotizacion           CrmCotizacion?            @relation(fields: [crmCotizacionId], references: [id])
-  items                   EcommerceCotizacionItem[]
+  id                 String                    @id @default(uuid())
+  correlativo        Int                       @default(autoincrement())
+  codigo             String                    @unique
+  origen             String                    @default("CRM")
+  ecommerceClienteId String?
+  clienteId          String?
+  nombreContacto     String
+  email              String?
+  telefono           String?
+  empresa            String?
+  rut                String?
+  observaciones      String?
+  metadata           Json?
+  ocCliente          String?
+  subtotalNeto       Int
+  iva                Int
+  total              Int
+  estado             EcommerceEstadoCotizacion @default(NUEVA)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  crmCotizacionId    String?                   @unique
+  direccion          String?
+  estadoCrm          CrmEstadoCotizacion       @default(NUEVA)
+  nombreObra         String?
+  origenCliente      OrigenCliente?
+  tipoCierre         CrmTipoCierre?
+  vendedorId         String?
+  crmCotizacion      CrmCotizacion?            @relation(fields: [crmCotizacionId], references: [id])
+  ecommerceCliente   EcommerceCliente?         @relation(fields: [ecommerceClienteId], references: [id])
+  items              EcommerceCotizacionItem[]
 
-  @@map("ecommerce_cotizacion")
   @@index([ecommerceClienteId])
   @@index([clienteId], map: "ecommerce_cotizacion_clienteId_legacy_idx")
   @@index([estado])
+  @@index([createdAt])
+  @@index([estadoCrm])
+  @@map("ecommerce_cotizacion")
 }
 
 model EcommerceCotizacionItem {
@@ -391,9 +389,9 @@ model EcommerceCotizacionItem {
   cotizacion                 EcommerceCotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
   producto                   Producto            @relation(fields: [productoId], references: [id])
 
-  @@map("ecommerce_cotizacion_item")
   @@index([cotizacionId])
   @@index([productoId])
+  @@map("ecommerce_cotizacion_item")
 }
 
 model EcommerceNotificacion {
@@ -406,11 +404,11 @@ model EcommerceNotificacion {
   leido           Boolean  @default(false)
   createdAt       DateTime @default(now())
 
-  @@map("ecommerce_notificacion")
   @@index([leido])
   @@index([referenciaId])
   @@index([referenciaTabla])
   @@index([tipo])
+  @@map("ecommerce_notificacion")
 }
 
 model EcommercePago {
@@ -426,43 +424,42 @@ model EcommercePago {
   updatedAt          DateTime            @updatedAt
   pedido             EcommercePedido     @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 
-  @@map("ecommerce_pago")
   @@index([estado])
   @@index([pedidoId])
+  @@map("ecommerce_pago")
 }
 
 model EcommercePedido {
-  id                  String                @id @default(uuid())
-  correlativo         Int                   @default(autoincrement())
-  codigo              String                @unique
-  ecommerceClienteId  String?
-  // Legacy CRM clienteId. No relation is defined to keep CRM isolated.
-  clienteId           String?
-  despachoNombre      String?
-  despachoTelefono    String?
-  despachoEmail       String?
-  despachoDireccion   String?
-  despachoComuna      String?
-  despachoCiudad      String?
-  despachoRegion      String?
-  despachoNotas       String?
-  subtotalNeto        Int
-  iva                 Int
-  total               Int
-  estado              EcommerceEstadoPedido @default(CREADO)
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-  crmCotizacionId     String?
-  ecommerceCliente    EcommerceCliente?     @relation(fields: [ecommerceClienteId], references: [id])
-  crmCotizacion       CrmCotizacion?        @relation(fields: [crmCotizacionId], references: [id])
-  direccion           EcommerceDireccion?   @relation("PedidoDireccion")
-  pagos               EcommercePago[]
-  items               EcommercePedidoItem[]
+  id                 String                @id @default(uuid())
+  correlativo        Int                   @default(autoincrement())
+  codigo             String                @unique
+  ecommerceClienteId String?
+  clienteId          String?
+  despachoNombre     String?
+  despachoTelefono   String?
+  despachoEmail      String?
+  despachoDireccion  String?
+  despachoComuna     String?
+  despachoCiudad     String?
+  despachoRegion     String?
+  despachoNotas      String?
+  subtotalNeto       Int
+  iva                Int
+  total              Int
+  estado             EcommerceEstadoPedido @default(CREADO)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  crmCotizacionId    String?
+  direccion          EcommerceDireccion?   @relation("PedidoDireccion")
+  pagos              EcommercePago[]
+  crmCotizacion      CrmCotizacion?        @relation(fields: [crmCotizacionId], references: [id])
+  ecommerceCliente   EcommerceCliente?     @relation(fields: [ecommerceClienteId], references: [id])
+  items              EcommercePedidoItem[]
 
-  @@map("ecommerce_pedido")
   @@index([ecommerceClienteId])
   @@index([clienteId], map: "ecommerce_pedido_clienteId_legacy_idx")
   @@index([estado])
+  @@map("ecommerce_pedido")
 }
 
 model EcommercePedidoItem {
@@ -480,9 +477,9 @@ model EcommercePedidoItem {
   pedido                     EcommercePedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
   producto                   Producto        @relation(fields: [productoId], references: [id])
 
-  @@map("ecommerce_pedido_item")
   @@index([pedidoId])
   @@index([productoId])
+  @@map("ecommerce_pedido_item")
 }
 
 enum OrigenCliente {
@@ -494,7 +491,6 @@ enum EcommerceClienteTipo {
   NATURAL
   EMPRESA
 }
-
 
 enum ClientStatus {
   Activo
