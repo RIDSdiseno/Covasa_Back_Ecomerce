@@ -237,9 +237,11 @@ model CrmCotizacion {
 model EcommerceUsuario {
   id           String            @id @default(uuid())
   nombre       String
-  email        String            @unique
+  email        String?           @unique
   telefono     String?
-  passwordHash String
+  passwordHash String?
+  authProvider AuthProvider      @default(LOCAL)
+  microsoftSubject String?       @unique
   estado       String            @default("ACTIVO")
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
@@ -519,6 +521,11 @@ enum EcommerceEstadoCotizacion {
   EN_REVISION
   RESPONDIDA
   CERRADA
+}
+
+enum AuthProvider {
+  LOCAL
+  MICROSOFT
 }
 
 enum EcommerceEstadoPedido {

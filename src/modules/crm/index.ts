@@ -1,8 +1,3 @@
-import { Router } from "express";
-import cotizacionesRouter from "./cotizaciones/crmCotizaciones.rutas";
-
-const router = Router();
-
-router.use("/cotizaciones", cotizacionesRouter);
+import router from "./routes";
 
 export default router;

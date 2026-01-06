@@ -1,8 +1,6 @@
 import { Router } from "express";
-import { healthAuth, healthCheck } from "../controllers/healthController";
-import productosRouter from "./productos";
-import cotizacionesRouter from "./cotizaciones";
-import pagosRouter from "./pagos";
+import { healthAuth, healthCheck } from "../modules/system/health.controller";
+import legacyRouter from "./legacy.routes";
 import ecommerceRouter from "../modules/ecommerce";
 import crmRouter from "../modules/crm";
 
@@ -19,10 +17,8 @@ router.get("/", (_req, res) => {
 
 router.get("/health", healthCheck);
 router.post("/health/auth", healthAuth);
-router.use("/productos", productosRouter);
-router.use("/products", productosRouter);
-router.use("/cotizaciones", cotizacionesRouter);
-router.use("/pagos", pagosRouter);
+// DEPRECATED: rutas legacy de compatibilidad.
+router.use(legacyRouter);
 router.use("/ecommerce", ecommerceRouter);
 router.use("/crm", crmRouter);
 
