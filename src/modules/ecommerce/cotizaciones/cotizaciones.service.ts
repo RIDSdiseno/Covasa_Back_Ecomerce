@@ -170,8 +170,10 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
           ? { connect: { id: ecommerceClienteId } }
           : undefined,
         nombreContacto,
-        email: email || undefined,
-        telefono: telefono || undefined,
+        
+        email: (email ?? '').trim(),
+        telefono: (telefono ?? '').trim(),
+
         empresa: empresa || undefined,
         rut: rut || undefined,
         observaciones,

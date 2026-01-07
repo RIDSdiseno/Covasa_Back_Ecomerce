@@ -13,6 +13,7 @@ dist/
 # dependencies
 node_modules/
 **/node_modules/
+<<<<<<< HEAD
 >>>>>>> e8741ed (actualizacion de dependencias y archivos de configuracion)
 
 dist/
@@ -22,3 +23,6 @@ node_modules/
 
 dist/
 
+=======
+.env
+>>>>>>> c65ca45 (MICROSOFT LOGIN)
