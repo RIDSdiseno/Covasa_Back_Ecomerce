@@ -248,6 +248,7 @@ model EcommerceUsuario {
   updatedAt        DateTime          @updatedAt
   authProvider     AuthProvider      @default(LOCAL)
   microsoftSubject String?           @unique
+  googleSubject    String?           @unique
   cliente          EcommerceCliente?
 
   @@map("ecommerce_usuario")
@@ -562,6 +563,7 @@ enum EcommerceEstadoCotizacion {
 enum AuthProvider {
   LOCAL
   MICROSOFT
+  GOOGLE
 }
 
 enum EcommerceEstadoPedido {

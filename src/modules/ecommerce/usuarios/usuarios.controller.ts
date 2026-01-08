@@ -3,10 +3,12 @@ import { manejarAsync } from "../../../lib/manejarAsync";
 import {
   usuarioLoginSchema,
   usuarioMicrosoftSchema,
+  usuarioGoogleSchema,
   usuarioRegistroSchema,
 } from "./usuarios.schema";
 import {
   loginMicrosoftServicio,
+  loginGoogleServicio,
   loginUsuarioServicio,
   registrarUsuarioServicio,
   obtenerUsuarioServicio,
@@ -74,6 +76,31 @@ export const loginUsuarioMicrosoft = manejarAsync(async (req: Request, res: Resp
     ok: true,
     data: resultado,
     message: "Login Microsoft correcto",
+  });
+});
+
+/**
+ * POST /api/ecommerce/usuarios/login/google
+ * Body: { credential }
+ *
+ * Importante:
+ * - El FRONT (@react-oauth/google) obtiene credential del botón de Google
+ * - Luego llama a este endpoint con { credential }
+ *
+ * Respuesta: { ok, data: { token, user, direccionPrincipal }, message }
+ */
+export const loginUsuarioGoogle = manejarAsync(async (req: Request, res: Response) => {
+  // 1) Validación con Zod
+  const payload = usuarioGoogleSchema.parse(req.body);
+
+  // 2) Lógica de negocio (service) - aquí se verifica el token con Google Auth Library
+  const resultado = await loginGoogleServicio(payload);
+
+  // 3) Respuesta
+  res.json({
+    ok: true,
+    data: resultado,
+    message: "Login Google correcto",
   });
 });
 

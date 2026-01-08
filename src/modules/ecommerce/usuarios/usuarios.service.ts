@@ -3,6 +3,7 @@ import { ErrorApi } from "../../../lib/errores";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { JWTPayload } from "jose";
 import jwt from "jsonwebtoken";
+import { OAuth2Client } from "google-auth-library";
 import { prisma } from "../../../lib/prisma";
 import { construirDireccionLinea, normalizarTexto } from "../common/ecommerce.utils";
 import {
@@ -10,6 +11,7 @@ import {
   buscarUsuarioPorEmail,
   buscarUsuarioPorId,
   buscarUsuarioPorMicrosoftSubject,
+  buscarUsuarioPorGoogleSubject,
   actualizarClienteUsuario,
   actualizarUsuario,
   crearCliente,
@@ -41,6 +43,23 @@ const resolverMicrosoftClientId = () => {
 };
 
 const resolverMicrosoftTenant = () => normalizarTexto(process.env.MS_TENANT || "common") || "common";
+
+const resolverGoogleClientId = () => {
+  const clientId = normalizarTexto(process.env.GOOGLE_CLIENT_ID);
+  if (!clientId) {
+    throw new ErrorApi("GOOGLE_CLIENT_ID no configurado", 500);
+  }
+  return clientId;
+};
+
+let googleClient: OAuth2Client | null = null;
+
+const obtenerGoogleClient = () => {
+  if (!googleClient) {
+    googleClient = new OAuth2Client(resolverGoogleClientId());
+  }
+  return googleClient;
+};
 
 let microsoftJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 let microsoftTenantCache = "";
@@ -98,6 +117,10 @@ type LoginPayload = {
 
 type MicrosoftLoginPayload = {
   idToken: string;
+};
+
+type GoogleLoginPayload = {
+  credential: string;
 };
 
 export const registrarUsuarioServicio = async (payload: RegistroPayload) => {
@@ -376,6 +399,155 @@ export const obtenerUsuarioServicio = async (usuarioId: string) => {
       telefono: usuario.telefono,
       ecommerceClienteId,
       createdAt: usuario.createdAt,
+    },
+    direccionPrincipal: direccion
+      ? {
+          id: direccion.id,
+          nombreContacto: direccion.nombreRecibe,
+          telefono: direccion.telefonoRecibe,
+          email: direccion.email,
+          direccion: direccionLinea,
+          comuna: direccion.comuna,
+          ciudad: direccion.ciudad,
+          region: direccion.region,
+          notas: direccion.notas,
+        }
+      : null,
+  };
+};
+
+export const loginGoogleServicio = async (payload: GoogleLoginPayload) => {
+  if (!flagHabilitada(process.env.AUTH_GOOGLE_ENABLED)) {
+    throw new ErrorApi("Login Google deshabilitado", 403);
+  }
+
+  const client = obtenerGoogleClient();
+
+  let ticket;
+  try {
+    ticket = await client.verifyIdToken({
+      idToken: payload.credential,
+      audience: resolverGoogleClientId(),
+    });
+  } catch {
+    throw new ErrorApi("Token Google invalido", 401);
+  }
+
+  const googlePayload = ticket.getPayload();
+  if (!googlePayload) {
+    throw new ErrorApi("Token Google invalido", 401);
+  }
+
+  const subject = normalizarTexto(googlePayload.sub);
+  if (!subject) {
+    throw new ErrorApi("Token Google invalido", 401);
+  }
+
+  const email = googlePayload.email ? normalizarEmail(googlePayload.email) : "";
+  if (!email) {
+    throw new ErrorApi("No se pudo obtener email de Google", 400);
+  }
+
+  const nombre = normalizarTexto(googlePayload.name) || email;
+
+  const resultado = await prisma.$transaction(async (tx) => {
+    let usuario = await buscarUsuarioPorGoogleSubject(subject, tx);
+
+    if (!usuario && email) {
+      const usuarioPorEmail = await buscarUsuarioPorEmail(email, tx);
+      if (usuarioPorEmail) {
+        usuario = await actualizarUsuario(
+          usuarioPorEmail.id,
+          {
+            googleSubject: subject,
+            authProvider: "GOOGLE",
+            nombre,
+            email,
+          },
+          tx
+        );
+      }
+    }
+
+    if (!usuario) {
+      usuario = await crearUsuario(
+        {
+          nombre,
+          email,
+          passwordHash: null,
+          authProvider: "GOOGLE",
+          googleSubject: subject,
+        },
+        tx
+      );
+    } else {
+      const updates: Parameters<typeof actualizarUsuario>[1] = {};
+      if (usuario.authProvider !== "GOOGLE") {
+        updates.authProvider = "GOOGLE";
+      }
+      if (email && (!usuario.email || usuario.email.toLowerCase() !== email.toLowerCase())) {
+        updates.email = email;
+      }
+      if (nombre && usuario.nombre !== nombre) {
+        updates.nombre = nombre;
+      }
+      if (!usuario.googleSubject) {
+        updates.googleSubject = subject;
+      }
+      if (Object.keys(updates).length > 0) {
+        usuario = await actualizarUsuario(usuario.id, updates, tx);
+      }
+    }
+
+    const clienteExistente = await buscarClientePorEmail(email, tx);
+    let cliente = null;
+
+    if (clienteExistente) {
+      if (clienteExistente.usuarioId && clienteExistente.usuarioId !== usuario.id) {
+        throw new ErrorApi("El email ya esta registrado", 409);
+      }
+      cliente = clienteExistente.usuarioId
+        ? clienteExistente
+        : await actualizarClienteUsuario(clienteExistente.id, usuario.id, tx);
+    } else {
+      cliente = await crearCliente(
+        {
+          nombres: nombre,
+          emailContacto: email,
+          usuario: { connect: { id: usuario.id } },
+        },
+        tx
+      );
+    }
+
+    return { usuario, cliente };
+  });
+
+  const ecommerceClienteId = resultado.cliente?.id ?? resultado.usuario.cliente?.id ?? null;
+  const direccion = ecommerceClienteId ? await obtenerDireccionPrincipal(ecommerceClienteId) : null;
+  const direccionLinea = direccion
+    ? construirDireccionLinea(direccion.calle, direccion.numero, direccion.depto)
+    : "";
+
+  const token = jwt.sign(
+    {
+      sub: resultado.usuario.id,
+      provider: "GOOGLE",
+      role: "CLIENTE_ECOMMERCE",
+    },
+    resolverJwtSecret(),
+    { expiresIn: "7d" }
+  );
+
+  return {
+    token,
+    user: {
+      id: resultado.usuario.id,
+      nombre: resultado.usuario.nombre,
+      email: resultado.usuario.email ?? email,
+      telefono: resultado.usuario.telefono,
+      ecommerceClienteId,
+      createdAt: resultado.usuario.createdAt,
     },
     direccionPrincipal: direccion
       ? {

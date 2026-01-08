@@ -16,6 +16,10 @@ export const usuarioMicrosoftSchema = z.object({
   idToken: z.string().min(1),
 });
 
+export const usuarioGoogleSchema = z.object({
+  credential: z.string().min(1),
+});
+
 export const usuarioIdSchema = z.object({
   id: z.string().min(1),
 });

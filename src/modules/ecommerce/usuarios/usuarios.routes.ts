@@ -3,6 +3,7 @@ import {
   registrarUsuario,
   loginUsuario,
   loginUsuarioMicrosoft,
+  loginUsuarioGoogle,
   obtenerUsuarioActual,
 } from "./usuarios.controller";
 // import { authMiddleware } from "../../middleware/auth"; // ajusta si tienes uno
@@ -15,6 +16,9 @@ router.post("/login", loginUsuario);
 
 // Auth Microsoft (MSAL idToken -> backend)
 router.post("/login/microsoft", loginUsuarioMicrosoft);
+
+// Auth Google (@react-oauth/google credential -> backend)
+router.post("/login/google", loginUsuarioGoogle);
 
 // Usuario actual (protegido)
 // router.get("/me", authMiddleware, obtenerUsuarioActual);
