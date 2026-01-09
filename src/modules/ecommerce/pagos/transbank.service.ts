@@ -3,6 +3,10 @@ import { IntegrationApiKeys, IntegrationCommerceCodes, WebpayPlus } from "transb
 import { ErrorApi } from "../../../lib/errores";
 import { prisma } from "../../../lib/prisma";
 import { normalizarTexto } from "../common/ecommerce.utils";
+
+import { validarTransbankEnv } from "./transbank.env";
+
+
 import { registrarNotificacion } from "../notificaciones/notificaciones.service";
 import {
   actualizarPagoDatos,
@@ -11,7 +15,7 @@ import {
   buscarPedidoParaPago,
   crearPago,
 } from "./pagos.repo";
-
+ 
 type GatewayPayload = Record<string, unknown>;
 
 type TransbankCreateResponse = {
@@ -46,6 +50,9 @@ const logTransbank = (mensaje: string, datos: Record<string, unknown>) => {
 };
 
 const obtenerClienteTransbank = () => {
+    
+  validarTransbankEnv();
+
   if (esProduccion()) {
     const comercio = normalizarTexto(process.env.TRANSBANK_COMMERCE_CODE);
     const apiKey = normalizarTexto(process.env.TRANSBANK_API_KEY);
