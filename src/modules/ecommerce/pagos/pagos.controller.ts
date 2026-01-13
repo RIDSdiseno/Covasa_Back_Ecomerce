@@ -1,7 +1,38 @@
 import { Request, Response } from "express";
+import { ErrorApi } from "../../../lib/errores";
 import { manejarAsync } from "../../../lib/manejarAsync";
+import { normalizarTexto } from "../common/ecommerce.utils";
 import { pagoCrearSchema, pagoIdSchema } from "./pagos.schema";
-import { confirmarPagoServicio, crearPagoServicio, rechazarPagoServicio, obtenerPagoReciboServicio } from "./pagos.service";
+import {
+  confirmarPagoServicio,
+  crearPagoServicio,
+  generarPagoPdfServicio,
+  listarMisPagosServicio,
+  obtenerPagoDetalleUsuarioServicio,
+  obtenerPagoReciboServicio,
+  rechazarPagoServicio,
+} from "./pagos.service";
+
+const obtenerUsuarioId = (req: Request, res: Response) => {
+  const authUserId = res.locals.auth?.sub as string | undefined;
+  if (authUserId) {
+    return authUserId;
+  }
+
+  const headerValue = req.headers["x-usuario-id"] ?? req.headers["x-user-id"];
+  const headerId = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  const queryValue = req.query.usuarioId ?? req.query.userId;
+  const queryId = Array.isArray(queryValue) ? queryValue[0] : queryValue;
+
+  const usuarioId = normalizarTexto(typeof headerId === "string" ? headerId : "") ||
+    normalizarTexto(typeof queryId === "string" ? queryId : "");
+
+  if (!usuarioId) {
+    throw new ErrorApi("usuarioId requerido", 401);
+  }
+
+  return usuarioId;
+};
 
 // POST /api/ecommerce/payments
 // Input: { pedidoId, metodo, monto, referencia?, evidenciaUrl?, gatewayPayloadJson? }.
@@ -52,4 +83,38 @@ export const obtenerPagoRecibo = manejarAsync(async (req: Request, res: Response
     ok: true,
     data: pago,
   });
+});
+
+// GET /api/ecommerce/pagos/mis-pagos
+export const listarMisPagos = manejarAsync(async (req: Request, res: Response) => {
+  const usuarioId = obtenerUsuarioId(req, res);
+  const pagos = await listarMisPagosServicio(usuarioId);
+
+  res.json({
+    ok: true,
+    data: pagos,
+  });
+});
+
+// GET /api/ecommerce/pagos/mis-pagos/:id
+export const obtenerPagoDetalle = manejarAsync(async (req: Request, res: Response) => {
+  const usuarioId = obtenerUsuarioId(req, res);
+  const { id } = pagoIdSchema.parse(req.params);
+  const pago = await obtenerPagoDetalleUsuarioServicio(usuarioId, id);
+
+  res.json({
+    ok: true,
+    data: pago,
+  });
+});
+
+// GET /api/ecommerce/pagos/mis-pagos/:id/recibo.pdf
+export const descargarPagoPdf = manejarAsync(async (req: Request, res: Response) => {
+  const usuarioId = obtenerUsuarioId(req, res);
+  const { id } = pagoIdSchema.parse(req.params);
+  const resultado = await generarPagoPdfServicio(usuarioId, id);
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${resultado.fileName}"`);
+  res.send(resultado.buffer);
 });

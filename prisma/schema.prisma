@@ -578,6 +578,7 @@ enum EcommerceEstadoPedido {
 enum EcommerceMetodoPago {
   TRANSBANK
   APPLE_PAY
+  STRIPE
   TRANSFERENCIA
   OTRO
   APPLEPAY_DEV

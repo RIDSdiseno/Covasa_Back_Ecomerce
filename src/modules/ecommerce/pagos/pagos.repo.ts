@@ -137,3 +137,120 @@ export const obtenerPagoParaRecibo = (id: string, tx?: DbClient) =>
       },
     },
   });
+
+export const listarPagosPorUsuario = (usuarioId: string, email?: string, tx?: DbClient) =>
+  db(tx).ecommercePago.findMany({
+    where: {
+      pedido: {
+        OR: [
+          {
+            ecommerceCliente: {
+              is: {
+                usuarioId,
+              },
+            },
+          },
+          ...(email ? [{ despachoEmail: email }] : []),
+        ],
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      metodo: true,
+      estado: true,
+      monto: true,
+      referencia: true,
+      gatewayPayloadJson: true,
+      createdAt: true,
+      updatedAt: true,
+      pedido: {
+        select: {
+          id: true,
+          codigo: true,
+          total: true,
+          estado: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
+
+export const obtenerPagoDetallePorUsuario = (
+  id: string,
+  usuarioId: string,
+  email?: string,
+  tx?: DbClient
+) =>
+  db(tx).ecommercePago.findFirst({
+    where: {
+      id,
+      pedido: {
+        OR: [
+          {
+            ecommerceCliente: {
+              is: {
+                usuarioId,
+              },
+            },
+          },
+          ...(email ? [{ despachoEmail: email }] : []),
+        ],
+      },
+    },
+    select: {
+      id: true,
+      metodo: true,
+      estado: true,
+      monto: true,
+      referencia: true,
+      gatewayPayloadJson: true,
+      createdAt: true,
+      updatedAt: true,
+      pedido: {
+        select: {
+          id: true,
+          codigo: true,
+          total: true,
+          subtotalNeto: true,
+          iva: true,
+          estado: true,
+          createdAt: true,
+          direccion: {
+            select: {
+              nombreRecibe: true,
+              telefonoRecibe: true,
+              email: true,
+              calle: true,
+              numero: true,
+              depto: true,
+              comuna: true,
+              ciudad: true,
+              region: true,
+              codigoPostal: true,
+              notas: true,
+            },
+          },
+          ecommerceCliente: {
+            select: {
+              nombres: true,
+              apellidos: true,
+              emailContacto: true,
+              telefono: true,
+            },
+          },
+          items: {
+            select: {
+              descripcionSnapshot: true,
+              cantidad: true,
+              precioUnitarioNetoSnapshot: true,
+              subtotalNetoSnapshot: true,
+              ivaPctSnapshot: true,
+              ivaMontoSnapshot: true,
+              totalSnapshot: true,
+            },
+          },
+        },
+      },
+    },
+  });
