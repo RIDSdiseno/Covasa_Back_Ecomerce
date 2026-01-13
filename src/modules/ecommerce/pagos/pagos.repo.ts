@@ -254,3 +254,54 @@ export const obtenerPagoDetallePorUsuario = (
       },
     },
   });
+
+export const listarPagosParaIntegracion = (
+  params: { since?: Date; estado?: EcommerceEstadoPago; limit: number },
+  tx?: DbClient
+) =>
+  db(tx).ecommercePago.findMany({
+    where: {
+      ...(params.estado ? { estado: params.estado } : {}),
+      ...(params.since ? { updatedAt: { gte: params.since } } : {}),
+    },
+    orderBy: { updatedAt: "asc" },
+    take: params.limit,
+    select: {
+      id: true,
+      pedidoId: true,
+      metodo: true,
+      estado: true,
+      monto: true,
+      referencia: true,
+      createdAt: true,
+      updatedAt: true,
+      pedido: {
+        select: {
+          id: true,
+          correlativo: true,
+          codigo: true,
+          ecommerceClienteId: true,
+          clienteId: true,
+          despachoNombre: true,
+          despachoTelefono: true,
+          despachoEmail: true,
+          despachoDireccion: true,
+          despachoComuna: true,
+          despachoCiudad: true,
+          despachoRegion: true,
+          subtotalNeto: true,
+          iva: true,
+          total: true,
+          estado: true,
+          createdAt: true,
+          updatedAt: true,
+          crmCotizacionId: true,
+          crmCotizacion: {
+            select: {
+              vendedorId: true,
+            },
+          },
+        },
+      },
+    },
+  });

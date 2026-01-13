@@ -1,12 +1,14 @@
 import { Request, Response } from "express";
+import { EcommerceEstadoPago } from "@prisma/client";
 import { ErrorApi } from "../../../lib/errores";
 import { manejarAsync } from "../../../lib/manejarAsync";
 import { normalizarTexto } from "../common/ecommerce.utils";
-import { pagoCrearSchema, pagoIdSchema } from "./pagos.schema";
+import { pagoCrearSchema, pagoIdSchema, pagosIntegracionQuerySchema } from "./pagos.schema";
 import {
   confirmarPagoServicio,
   crearPagoServicio,
   generarPagoPdfServicio,
+  listarPagosIntegracionServicio,
   listarMisPagosServicio,
   obtenerPagoDetalleUsuarioServicio,
   obtenerPagoReciboServicio,
@@ -32,6 +34,32 @@ const obtenerUsuarioId = (req: Request, res: Response) => {
   }
 
   return usuarioId;
+};
+
+const obtenerTokenIntegracion = (req: Request) => {
+  const headerValue = req.headers["x-integration-token"];
+  return normalizarTexto(Array.isArray(headerValue) ? headerValue[0] : headerValue ?? "");
+};
+
+const validarTokenIntegracion = (req: Request) => {
+  const tokenEsperado = normalizarTexto(process.env.ECOMMERCE_INTEGRATION_TOKEN || "");
+  if (!tokenEsperado) {
+    return;
+  }
+
+  const tokenRecibido = obtenerTokenIntegracion(req);
+  if (!tokenRecibido || tokenRecibido !== tokenEsperado) {
+    throw new ErrorApi("Token de integracion invalido", 401);
+  }
+};
+
+const parsearFecha = (value?: string) => {
+  if (!value) return undefined;
+  const fecha = new Date(value);
+  if (Number.isNaN(fecha.getTime())) {
+    throw new ErrorApi("since invalido", 400);
+  }
+  return fecha;
 };
 
 // POST /api/ecommerce/payments
@@ -117,4 +145,23 @@ export const descargarPagoPdf = manejarAsync(async (req: Request, res: Response)
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="${resultado.fileName}"`);
   res.send(resultado.buffer);
+});
+
+// GET /api/ecommerce/pagos/integracion/confirmados
+export const listarPagosIntegracion = manejarAsync(async (req: Request, res: Response) => {
+  validarTokenIntegracion(req);
+  const query = pagosIntegracionQuerySchema.parse(req.query);
+  const since = parsearFecha(query.since);
+  const estado = query.estado ?? EcommerceEstadoPago.CONFIRMADO;
+
+  const pagos = await listarPagosIntegracionServicio({
+    since,
+    estado,
+    limit: query.limit,
+  });
+
+  res.json({
+    ok: true,
+    data: pagos,
+  });
 });

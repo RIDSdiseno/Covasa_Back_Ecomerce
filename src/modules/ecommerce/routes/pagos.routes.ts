@@ -4,6 +4,7 @@ import {
   crearPago,
   descargarPagoPdf,
   listarMisPagos,
+  listarPagosIntegracion,
   obtenerPagoDetalle,
   obtenerPagoRecibo,
   rechazarPago,
@@ -38,6 +39,7 @@ router.get("/stripe/__stripe_ping", (_req, res) => {
 });
 router.get("/stripe/status", obtenerEstadoStripe);
 router.post("/stripe/webhook", recibirStripeWebhook);
+router.get("/integracion/confirmados", listarPagosIntegracion);
 router.get("/mis-pagos", optionalAuth, listarMisPagos);
 router.get("/mis-pagos/:id/recibo.pdf", optionalAuth, descargarPagoPdf);
 router.get("/mis-pagos/:id", optionalAuth, obtenerPagoDetalle);

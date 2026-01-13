@@ -11,6 +11,7 @@ import {
   buscarPedidoPorId,
   crearPago,
   listarPagosPorUsuario,
+  listarPagosParaIntegracion,
   obtenerPagoDetallePorUsuario,
   obtenerPagoParaRecibo,
 } from "./pagos.repo";
@@ -208,6 +209,51 @@ const formatDateIso = (value: Date | string | null | undefined) => {
     return "";
   }
   return date.toISOString();
+};
+
+export const listarPagosIntegracionServicio = async (params: {
+  since?: Date;
+  estado?: EcommerceEstadoPago;
+  limit: number;
+}) => {
+  const pagos = await listarPagosParaIntegracion(params);
+
+  return pagos.map((pago) => ({
+    pago: {
+      id: pago.id,
+      pedidoId: pago.pedidoId,
+      metodo: pago.metodo,
+      estado: pago.estado,
+      monto: pago.monto,
+      referencia: pago.referencia,
+      createdAt: pago.createdAt,
+      updatedAt: pago.updatedAt,
+    },
+    pedido: pago.pedido
+      ? {
+          id: pago.pedido.id,
+          correlativo: pago.pedido.correlativo,
+          codigo: pago.pedido.codigo,
+          ecommerceClienteId: pago.pedido.ecommerceClienteId,
+          clienteId: pago.pedido.clienteId,
+          despachoNombre: pago.pedido.despachoNombre,
+          despachoTelefono: pago.pedido.despachoTelefono,
+          despachoEmail: pago.pedido.despachoEmail,
+          despachoDireccion: pago.pedido.despachoDireccion,
+          despachoComuna: pago.pedido.despachoComuna,
+          despachoCiudad: pago.pedido.despachoCiudad,
+          despachoRegion: pago.pedido.despachoRegion,
+          subtotalNeto: pago.pedido.subtotalNeto,
+          iva: pago.pedido.iva,
+          total: pago.pedido.total,
+          estado: pago.pedido.estado,
+          createdAt: pago.pedido.createdAt,
+          updatedAt: pago.pedido.updatedAt,
+          crmCotizacionId: pago.pedido.crmCotizacionId,
+          vendedorId: pago.pedido.crmCotizacion?.vendedorId ?? null,
+        }
+      : null,
+  }));
 };
 
 // Obtiene un pago con datos para boleta/recibo (sin token).
