@@ -2,106 +2,60 @@
 import { prisma } from "../../../lib/prisma";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
-
 const db = (tx?: DbClient) => tx ?? prisma;
+
+const usuarioSelect = {
+  id: true,
+  nombre: true,
+  email: true,
+  telefono: true,
+  passwordHash: true,
+  authProvider: true,
+  microsoftSubject: true,
+  googleSubject: true,
+  createdAt: true,
+} as const;
 
 export const buscarUsuarioPorEmail = (email: string, tx?: DbClient) =>
   db(tx).ecommerceUsuario.findFirst({
     where: { email: { equals: email, mode: "insensitive" } },
-    select: {
-      id: true,
-      nombre: true,
-      email: true,
-      telefono: true,
-      passwordHash: true,
-      authProvider: true,
-      microsoftSubject: true,
-      googleSubject: true,
-      createdAt: true,
-      cliente: { select: { id: true } },
-    },
+    select: usuarioSelect,
   });
 
 export const buscarUsuarioPorMicrosoftSubject = (subject: string, tx?: DbClient) =>
   db(tx).ecommerceUsuario.findUnique({
     where: { microsoftSubject: subject },
-    select: {
-      id: true,
-      nombre: true,
-      email: true,
-      telefono: true,
-      authProvider: true,
-      microsoftSubject: true,
-      googleSubject: true,
-      createdAt: true,
-      cliente: { select: { id: true } },
-    },
+    select: usuarioSelect,
   });
 
 export const buscarUsuarioPorGoogleSubject = (subject: string, tx?: DbClient) =>
   db(tx).ecommerceUsuario.findUnique({
     where: { googleSubject: subject },
-    select: {
-      id: true,
-      nombre: true,
-      email: true,
-      telefono: true,
-      authProvider: true,
-      microsoftSubject: true,
-      googleSubject: true,
-      createdAt: true,
-      cliente: { select: { id: true } },
-    },
+    select: usuarioSelect,
   });
 
 export const buscarUsuarioPorId = (id: string, tx?: DbClient) =>
   db(tx).ecommerceUsuario.findUnique({
     where: { id },
-    select: {
-      id: true,
-      nombre: true,
-      email: true,
-      telefono: true,
-      authProvider: true,
-      microsoftSubject: true,
-      googleSubject: true,
-      createdAt: true,
-      cliente: { select: { id: true } },
-    },
+    select: usuarioSelect,
   });
 
 export const crearUsuario = (data: Prisma.EcommerceUsuarioCreateInput, tx?: DbClient) =>
   db(tx).ecommerceUsuario.create({
     data,
-    select: {
-      id: true,
-      nombre: true,
-      email: true,
-      telefono: true,
-      authProvider: true,
-      microsoftSubject: true,
-      googleSubject: true,
-      createdAt: true,
-      cliente: { select: { id: true } },
-    },
+    select: usuarioSelect,
   });
 
 export const actualizarUsuario = (id: string, data: Prisma.EcommerceUsuarioUpdateInput, tx?: DbClient) =>
   db(tx).ecommerceUsuario.update({
     where: { id },
     data,
-    select: {
-      id: true,
-      nombre: true,
-      email: true,
-      telefono: true,
-      authProvider: true,
-      microsoftSubject: true,
-      googleSubject: true,
-      createdAt: true,
-      cliente: { select: { id: true } },
-    },
+    select: usuarioSelect,
   });
+
+/* =========================
+   EcommerceCliente (separado)
+========================= */
 
 export const buscarClientePorEmail = (email: string, tx?: DbClient) =>
   db(tx).ecommerceCliente.findFirst({
@@ -111,6 +65,20 @@ export const buscarClientePorEmail = (email: string, tx?: DbClient) =>
         { usuario: { email: { equals: email, mode: "insensitive" } } },
       ],
     },
+    select: {
+      id: true,
+      usuarioId: true,
+      nombres: true,
+      apellidos: true,
+      emailContacto: true,
+      telefono: true,
+    },
+  });
+
+// ✅ útil para armar “me” / login providers
+export const buscarClientePorUsuarioId = (usuarioId: string, tx?: DbClient) =>
+  db(tx).ecommerceCliente.findFirst({
+    where: { usuarioId },
     select: {
       id: true,
       usuarioId: true,
@@ -149,6 +117,10 @@ export const actualizarClienteUsuario = (id: string, usuarioId: string, tx?: DbC
       createdAt: true,
     },
   });
+
+/* =========================
+   Direcciones
+========================= */
 
 export const limpiarDireccionesPrincipales = (ecommerceClienteId: string, tx?: DbClient) =>
   db(tx).ecommerceDireccion.updateMany({
