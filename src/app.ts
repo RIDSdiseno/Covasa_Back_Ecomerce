@@ -13,6 +13,7 @@ const defaultAllowedOrigins = [
   "http://127.0.0.1:3001",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
+  "https://covasachile.cl"
 ];
 
 const envAllowed = (process.env.ALLOWED_ORIGINS || "")
