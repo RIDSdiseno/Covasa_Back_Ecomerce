@@ -19,6 +19,15 @@ import {
   obtenerDireccionPrincipal,
 } from "./usuarios.repo";
 
+async function obtenerEcommerceClienteIdPorUsuario(usuarioId: string): Promise<string | null> {
+  const cliente = await prisma.ecommerceCliente.findUnique({
+    where: { usuarioId },
+    select: { id: true },
+  });
+  return cliente?.id ?? null;
+}
+
+
 const normalizarEmail = (email: string) => normalizarTexto(email).toLowerCase();
 
 const flagHabilitada = (valor?: string) => {
@@ -195,7 +204,7 @@ export const loginUsuarioServicio = async (payload: LoginPayload) => {
     throw new ErrorApi("Credenciales invalidas", 401);
   }
 
-  const ecommerceClienteId = usuario.cliente?.id ?? null;
+  const ecommerceClienteId = await obtenerEcommerceClienteIdPorUsuario(usuario.id);
   const direccion = ecommerceClienteId ? await obtenerDireccionPrincipal(ecommerceClienteId) : null;
 
   const direccionLinea = direccion
@@ -337,7 +346,8 @@ export const loginMicrosoftServicio = async (payload: MicrosoftLoginPayload) => 
     return { usuario, cliente };
   });
 
-  const ecommerceClienteId = resultado.cliente?.id ?? resultado.usuario.cliente?.id ?? null;
+const ecommerceClienteId =
+  resultado.cliente?.id ?? (await obtenerEcommerceClienteIdPorUsuario(resultado.usuario.id));
   const direccion = ecommerceClienteId ? await obtenerDireccionPrincipal(ecommerceClienteId) : null;
   const direccionLinea = direccion
     ? construirDireccionLinea(direccion.calle, direccion.numero, direccion.depto)
@@ -385,7 +395,7 @@ export const obtenerUsuarioServicio = async (usuarioId: string) => {
     throw new ErrorApi("Usuario no encontrado", 404);
   }
 
-  const ecommerceClienteId = usuario.cliente?.id ?? null;
+const ecommerceClienteId = await obtenerEcommerceClienteIdPorUsuario(usuario.id);
   const direccion = ecommerceClienteId ? await obtenerDireccionPrincipal(ecommerceClienteId) : null;
   const direccionLinea = direccion
     ? construirDireccionLinea(direccion.calle, direccion.numero, direccion.depto)
@@ -523,7 +533,8 @@ export const loginGoogleServicio = async (payload: GoogleLoginPayload) => {
     return { usuario, cliente };
   });
 
-  const ecommerceClienteId = resultado.cliente?.id ?? resultado.usuario.cliente?.id ?? null;
+const ecommerceClienteId =
+  resultado.cliente?.id ?? (await obtenerEcommerceClienteIdPorUsuario(resultado.usuario.id));
   const direccion = ecommerceClienteId ? await obtenerDireccionPrincipal(ecommerceClienteId) : null;
   const direccionLinea = direccion
     ? construirDireccionLinea(direccion.calle, direccion.numero, direccion.depto)

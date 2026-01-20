@@ -74,6 +74,15 @@ type DireccionDespacho = {
   notas: string | null;
 };
 
+async function obtenerEcommerceClienteIdPorUsuario(usuarioId: string): Promise<string | null> {
+  const cliente = await prisma.ecommerceCliente.findUnique({
+    where: { usuarioId },
+    select: { id: true },
+  });
+  return cliente?.id ?? null;
+}
+
+
 const validarStockConfigurado = () => process.env.ECOMMERCE_VALIDAR_STOCK === "true";
 
 const normalizarNullable = (valor?: string | null) => normalizarTexto(valor ?? undefined);
@@ -175,10 +184,13 @@ const resolverUsuarioEcommerce = async (usuarioId?: string): Promise<UsuarioEcom
     throw new ErrorApi("Usuario ecommerce no encontrado", 404, { id: usuarioId });
   }
 
+  const ecommerceClienteId = await obtenerEcommerceClienteIdPorUsuario(usuario.id);
+
   return {
     id: usuario.id,
-    ecommerceClienteId: usuario.cliente?.id ?? null,
+    ecommerceClienteId,
   };
+
 };
 
 const registrarDireccionPedido = async (datos: {

@@ -1,19 +1,30 @@
 import Stripe from "stripe";
-import { EcommerceEstadoPago, EcommerceEstadoPedido, EcommerceMetodoPago, Prisma } from "@prisma/client";
+import {
+  EcommerceEstadoPago,
+  EcommerceEstadoPedido,
+  EcommerceMetodoPago,
+  Prisma,
+} from "@prisma/client";
 import { ErrorApi } from "../../../lib/errores";
 import { normalizarTexto } from "../common/ecommerce.utils";
 import { buscarUsuarioPorId } from "../usuarios/usuarios.repo";
 import { buscarPedidoParaPago, crearPago } from "./pagos.repo";
+import { prisma } from "../../../lib/prisma";
 
 type StripeConfig = {
   secretKey: string;
 };
 
 const normalizarFlag = (value?: string) => normalizarTexto(value).toLowerCase();
-const limpiarClaveStripe = (value?: string) => normalizarTexto(value).replace(/^['"]|['"]$/g, "");
+const limpiarClaveStripe = (value?: string) =>
+  normalizarTexto(value).replace(/^['"]|['"]$/g, "");
+
 const applePayDevHabilitado = () => {
   const flag = normalizarFlag(process.env.APPLEPAY_DEV_ENABLED);
-  return process.env.NODE_ENV !== "production" && (flag === "true" || flag === "1" || flag === "yes");
+  return (
+    process.env.NODE_ENV !== "production" &&
+    (flag === "true" || flag === "1" || flag === "yes")
+  );
 };
 
 let stripeCliente: Stripe | null = null;
@@ -36,10 +47,8 @@ const obtenerConfigStripe = (): StripeConfig => {
   return { secretKey };
 };
 
-const obtenerStripe = () => {
-  if (stripeCliente) {
-    return stripeCliente;
-  }
+const obtenerStripe = (): Stripe => {
+  if (stripeCliente) return stripeCliente;
 
   const { secretKey } = obtenerConfigStripe();
   stripeCliente = new Stripe(secretKey);
@@ -51,14 +60,27 @@ const normalizarMoneda = (valor?: string) => {
   return moneda || "clp";
 };
 
-export const crearApplePayDevIntentServicio = async (payload: { orderId: string; usuarioId: string }) => {
+async function obtenerEcommerceClienteIdPorUsuario(usuarioId: string): Promise<string | null> {
+  const cliente = await prisma.ecommerceCliente.findUnique({
+    where: { usuarioId },
+    select: { id: true },
+  });
+  return cliente?.id ?? null;
+}
+
+export const crearApplePayDevIntentServicio = async (payload: {
+  orderId: string;
+  usuarioId: string;
+}) => {
   const pedido = await buscarPedidoParaPago(payload.orderId);
   if (!pedido) {
     throw new ErrorApi("Pedido no encontrado", 404, { id: payload.orderId });
   }
 
   if (pedido.estado !== EcommerceEstadoPedido.CREADO) {
-    throw new ErrorApi("Pedido no esta disponible para pago", 409, { estado: pedido.estado });
+    throw new ErrorApi("Pedido no esta disponible para pago", 409, {
+      estado: pedido.estado,
+    });
   }
 
   if (pedido.total <= 0) {
@@ -70,13 +92,25 @@ export const crearApplePayDevIntentServicio = async (payload: { orderId: string;
     throw new ErrorApi("Usuario no encontrado", 401, { id: payload.usuarioId });
   }
 
-  const ecommerceClienteId = usuario.cliente?.id ?? null;
-  if (pedido.ecommerceClienteId && ecommerceClienteId && pedido.ecommerceClienteId !== ecommerceClienteId) {
-    throw new ErrorApi("Pedido no pertenece al cliente", 403, { pedidoId: pedido.id });
+  // ✅ NO dependemos de `usuario.cliente` (tu repo hoy no lo incluye)
+  const ecommerceClienteId = await obtenerEcommerceClienteIdPorUsuario(usuario.id);
+
+  if (
+    pedido.ecommerceClienteId &&
+    ecommerceClienteId &&
+    pedido.ecommerceClienteId !== ecommerceClienteId
+  ) {
+    throw new ErrorApi("Pedido no pertenece al cliente", 403, {
+      pedidoId: pedido.id,
+      pedidoClienteId: pedido.ecommerceClienteId,
+      usuarioClienteId: ecommerceClienteId,
+    });
   }
 
   const stripe = obtenerStripe();
-  const descripcion = normalizarTexto(pedido.codigo) ? `Pedido ${pedido.codigo}` : `Pedido ${pedido.id}`;
+  const descripcion = normalizarTexto(pedido.codigo)
+    ? `Pedido ${pedido.codigo}`
+    : `Pedido ${pedido.id}`;
 
   let intent: Stripe.PaymentIntent;
   try {
@@ -101,7 +135,9 @@ export const crearApplePayDevIntentServicio = async (payload: { orderId: string;
     estado: EcommerceEstadoPago.PENDIENTE,
     monto: pedido.total,
     referencia: intent.id,
-    gatewayPayloadJson: { stripe: { intentId: intent.id, status: intent.status } } as Prisma.InputJsonValue,
+    gatewayPayloadJson: {
+      stripe: { intentId: intent.id, status: intent.status },
+    } as Prisma.InputJsonValue,
   });
 
   return { clientSecret: intent.client_secret };

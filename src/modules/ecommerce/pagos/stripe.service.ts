@@ -48,6 +48,15 @@ type StripeCreateIntentPayload = {
   metadata?: Record<string, unknown>;
 };
 
+async function obtenerEcommerceClienteIdPorUsuario(usuarioId: string): Promise<string | null> {
+  const cliente = await prisma.ecommerceCliente.findUnique({
+    where: { usuarioId },
+    select: { id: true },
+  });
+  return cliente?.id ?? null;
+}
+
+
 type GatewayPayload = Record<string, unknown>;
 
 const limpiarClaveStripe = (value?: string) => normalizarTexto(value).replace(/^['"]|['"]$/g, "");
@@ -84,6 +93,8 @@ const obtenerWebhookSecret = () => {
   }
   return secreto;
 };
+
+
 
 const normalizarMoneda = (valor?: string) => {
   const moneda = normalizarTexto(valor || "clp").toLowerCase();
@@ -353,10 +364,20 @@ export const crearStripeIntentServicio = async (payload: { pedidoId: string; usu
       throw new ErrorApi("Usuario no encontrado", 401, { id: payload.usuarioId });
     }
 
-    const ecommerceClienteId = usuario.cliente?.id ?? null;
-    if (pedido.ecommerceClienteId && ecommerceClienteId && pedido.ecommerceClienteId !== ecommerceClienteId) {
-      throw new ErrorApi("Pedido no pertenece al cliente", 403, { pedidoId: pedido.id });
+    const ecommerceClienteId = await obtenerEcommerceClienteIdPorUsuario(usuario.id);
+    if (
+      pedido.ecommerceClienteId &&
+      ecommerceClienteId &&
+      pedido.ecommerceClienteId !== ecommerceClienteId
+    ) {
+      throw new ErrorApi("Pedido no pertenece al cliente", 403, {
+        pedidoId: pedido.id,
+        pedidoClienteId: pedido.ecommerceClienteId,
+        usuarioClienteId: ecommerceClienteId,
+      });
     }
+
+
   }
 
   const stripe = obtenerStripe();
