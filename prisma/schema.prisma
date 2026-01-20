@@ -238,17 +238,19 @@ model CrmCotizacion {
 }
 
 model EcommerceUsuario {
-  id               String            @id @default(uuid())
+  id               String       @id @default(uuid())
   nombre           String
-  email            String?           @unique
+  email            String?      @unique
   telefono         String?
   passwordHash     String?
-  estado           String            @default("ACTIVO")
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  authProvider     AuthProvider      @default(LOCAL)
-  microsoftSubject String?           @unique @map("microsoft_subject")
-  googleSubject    String?           @unique @map("google_subject")
+  estado           String       @default("ACTIVO")
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  authProvider     AuthProvider @default(LOCAL)
+
+  microsoftSubject String?      @unique
+  googleSubject    String?      @unique
+
   cliente          EcommerceCliente?
 
   @@map("ecommerce_usuario")
