@@ -65,6 +65,7 @@ export const quoteCrearSchema = z.object({
     .min(1),
 });
 
+
 export const cotizacionIdSchema = z.object({
   id: z.string().min(1),
 });
