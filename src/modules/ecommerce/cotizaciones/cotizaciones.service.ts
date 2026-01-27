@@ -280,43 +280,33 @@ export const listarCotizacionesServicio = async (params: {
 
   const where = filtros.length > 0 ? { AND: filtros } : {};
 
-  const [items, total] = await prisma.$transaction([
-    prisma.ecommerceCotizacion.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: PAGE_SIZE,
-      select: {
-        id: true,
-        codigo: true,
-        createdAt: true,
-        nombreContacto: true,
-        email: true,
-        telefono: true,
-        estado: true,
-        total: true,
-        _count: { select: { items: true } },
-      },
-    }),
-    prisma.ecommerceCotizacion.count({ where }),
-  ]);
+  const items = await prisma.ecommerceCotizacion.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      codigo: true,
+      createdAt: true,
+      nombreContacto: true,
+      email: true,
+      telefono: true,
+      estado: true,
+      total: true,
+      _count: { select: { items: true } },
+    },
+  });
 
-  return {
-    page,
-    pageSize: PAGE_SIZE,
-    total,
-    items: items.map((item) => ({
-      id: item.id,
-      codigo: item.codigo,
-      createdAt: item.createdAt,
-      nombreContacto: item.nombreContacto,
-      email: item.email ?? null,
-      telefono: item.telefono ?? null,
-      estado: item.estado,
-      total: item.total,
-      cantidadItems: item._count.items,
-    })),
-  };
+  return items.map((item) => ({
+    id: item.id,
+    codigo: item.codigo,
+    createdAt: item.createdAt,
+    nombreContacto: item.nombreContacto,
+    email: item.email ?? null,
+    telefono: item.telefono ?? null,
+    estado: item.estado,
+    total: item.total,
+    itemsCount: item._count.items,
+  }));
 };
 
 // Convierte una cotizacion a carrito ACTIVO usando snapshots de la cotizacion.
