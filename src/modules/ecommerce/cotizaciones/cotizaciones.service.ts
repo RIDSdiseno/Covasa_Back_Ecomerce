@@ -2,6 +2,8 @@ import { randomUUID } from "crypto";
 import { CrmEstadoCotizacion, EcommerceEstadoCotizacion, OrigenCliente, Prisma } from "@prisma/client";
 import { ErrorApi } from "../../../lib/errores";
 import { prisma } from "../../../lib/prisma";
+
+const PAGE_SIZE = 20;
 import {
   construirObservaciones,
   formatearCodigo,
@@ -217,6 +219,104 @@ export const obtenerCotizacionServicio = async (id: string) => {
     throw new ErrorApi("Cotizacion no encontrada", 404, { id });
   }
   return cotizacion;
+};
+
+// Lista cotizaciones ecommerce con paginacion y filtros.
+export const listarCotizacionesServicio = async (params: {
+  status?: string;
+  q?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+}) => {
+  const status = (params.status ?? "").trim().toUpperCase();
+  const estadoEcommerce = status && Object.values(EcommerceEstadoCotizacion).includes(status as EcommerceEstadoCotizacion)
+    ? (status as EcommerceEstadoCotizacion)
+    : undefined;
+
+  if (params.status && !estadoEcommerce) {
+    throw new ErrorApi("Estado invalido", 400, { status: params.status });
+  }
+
+  const q = (params.q ?? "").trim();
+  const desde = params.from ? new Date(params.from) : undefined;
+  const hasta = params.to ? new Date(params.to) : undefined;
+
+  if (desde && Number.isNaN(desde.getTime())) {
+    throw new ErrorApi("Fecha invalida", 400, { from: params.from });
+  }
+  if (hasta && Number.isNaN(hasta.getTime())) {
+    throw new ErrorApi("Fecha invalida", 400, { to: params.to });
+  }
+
+  const page = params.page ?? 1;
+  const skip = (page - 1) * PAGE_SIZE;
+
+  const filtros: Prisma.EcommerceCotizacionWhereInput[] = [];
+
+  if (estadoEcommerce) {
+    filtros.push({ estado: estadoEcommerce });
+  }
+
+  if (q) {
+    filtros.push({
+      OR: [
+        { codigo: { contains: q, mode: "insensitive" } },
+        { nombreContacto: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+        { telefono: { contains: q, mode: "insensitive" } },
+      ],
+    });
+  }
+
+  if (desde || hasta) {
+    filtros.push({
+      createdAt: {
+        gte: desde,
+        lte: hasta,
+      },
+    });
+  }
+
+  const where = filtros.length > 0 ? { AND: filtros } : {};
+
+  const [items, total] = await prisma.$transaction([
+    prisma.ecommerceCotizacion.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: PAGE_SIZE,
+      select: {
+        id: true,
+        codigo: true,
+        createdAt: true,
+        nombreContacto: true,
+        email: true,
+        telefono: true,
+        estado: true,
+        total: true,
+        _count: { select: { items: true } },
+      },
+    }),
+    prisma.ecommerceCotizacion.count({ where }),
+  ]);
+
+  return {
+    page,
+    pageSize: PAGE_SIZE,
+    total,
+    items: items.map((item) => ({
+      id: item.id,
+      codigo: item.codigo,
+      createdAt: item.createdAt,
+      nombreContacto: item.nombreContacto,
+      email: item.email ?? null,
+      telefono: item.telefono ?? null,
+      estado: item.estado,
+      total: item.total,
+      cantidadItems: item._count.items,
+    })),
+  };
 };
 
 // Convierte una cotizacion a carrito ACTIVO usando snapshots de la cotizacion.

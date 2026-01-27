@@ -1,11 +1,20 @@
 import { Request, Response } from "express";
 import { manejarAsync } from "../../../lib/manejarAsync";
-import { cotizacionCrearSchema, cotizacionIdSchema, quoteCrearSchema } from "./cotizaciones.schema";
+import { cotizacionCrearSchema, cotizacionIdSchema, cotizacionQuerySchema, quoteCrearSchema } from "./cotizaciones.schema";
 import {
   convertirCotizacionACarritoServicio,
   crearCotizacionServicio,
+  listarCotizacionesServicio,
   obtenerCotizacionServicio,
 } from "./cotizaciones.service";
+
+// GET /api/ecommerce/cotizaciones
+// Output: listado paginado de cotizaciones ecommerce.
+export const listarCotizaciones = manejarAsync(async (req: Request, res: Response) => {
+  const query = cotizacionQuerySchema.parse(req.query);
+  const resultado = await listarCotizacionesServicio(query);
+  res.json({ ok: true, data: resultado });
+});
 
 // POST /api/ecommerce/cotizaciones (principal) y /api/cotizaciones (legacy)
 // Input: { contacto, observaciones?, ocCliente?/ocNumero?, items[] }. Output: { id, codigo, total }.
