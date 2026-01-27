@@ -30,12 +30,13 @@ import {
   actualizarEstadoPedido,
   buscarClientePorId,
   buscarProductosPorIds,
+  buscarVariantesPorIds,
   crearPedido,
   obtenerCarritoPorId,
   obtenerPedidoPorId,
 } from "./pedidos.repo";
 
-type ItemSolicitud = { productoId: string; cantidad: number };
+type ItemSolicitud = { productoId: string; varianteId?: string; cantidad: number };
 
 type DespachoPayload = {
   nombre?: string;
@@ -241,6 +242,13 @@ export const crearPedidoServicio = async (payload: {
     throw new ErrorApi("Productos no encontrados", 404, { productos: faltantes });
   }
 
+  // Buscar variantes si hay items con varianteId
+  const varianteIds = itemsAgrupados
+    .map((item) => item.varianteId)
+    .filter((id): id is string => Boolean(id));
+  const variantes = varianteIds.length > 0 ? await buscarVariantesPorIds(varianteIds) : [];
+  const variantesPorId = new Map(variantes.map((v) => [v.id, v]));
+
   const usuario = await resolverUsuarioEcommerce(payload.usuarioId);
   const ecommerceClienteId = payload.ecommerceClienteId ?? usuario?.ecommerceClienteId ?? undefined;
 
@@ -265,7 +273,17 @@ export const crearPedidoServicio = async (payload: {
       throw new ErrorApi("Producto no encontrado", 404, { id: item.productoId });
     }
 
-    const precioNeto = producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral;
+    // Obtener variante si existe
+    const variante = item.varianteId ? variantesPorId.get(item.varianteId) : null;
+
+    // Usar precio de variante si existe y tiene precio, sino precio del producto
+    let precioNeto: number;
+    if (variante && variante.precio !== null) {
+      precioNeto = variante.precio;
+    } else {
+      precioNeto = producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral;
+    }
+
     const subtotal = precioNeto * item.cantidad;
     const ivaMonto = Math.round((subtotal * ivaPct) / 100);
     const total = subtotal + ivaMonto;
@@ -273,9 +291,14 @@ export const crearPedidoServicio = async (payload: {
     subtotalNeto += subtotal;
     ivaTotal += ivaMonto;
 
+    // Agregar info de variante a la descripción si existe
+    const descripcion = variante
+      ? `${producto.nombre} - ${variante.atributo}: ${variante.valor}`
+      : producto.nombre;
+
     return {
       producto: { connect: { id: item.productoId } },
-      descripcionSnapshot: producto.nombre,
+      descripcionSnapshot: descripcion,
       cantidad: item.cantidad,
       precioUnitarioNetoSnapshot: precioNeto,
       subtotalNetoSnapshot: subtotal,

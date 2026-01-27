@@ -1,6 +1,6 @@
 import { ErrorApi } from "../../../lib/errores";
 
-type ItemCantidad = { productoId: string; cantidad: number };
+type ItemCantidad = { productoId: string; varianteId?: string; cantidad: number };
 
 type ItemTotales = {
   subtotalNetoSnapshot: number;
@@ -20,16 +20,23 @@ export const formatearCodigo = (prefijo: string, correlativo: number, largo = 6)
   `${prefijo}-${String(correlativo).padStart(largo, "0")}`;
 
 export const agruparItems = (items: ItemCantidad[]) => {
-  const mapa = new Map<string, number>();
+  // Usar clave compuesta productoId::varianteId para agrupar
+  const mapa = new Map<string, { productoId: string; varianteId?: string; cantidad: number }>();
   items.forEach((item) => {
-    const actual = mapa.get(item.productoId) ?? 0;
-    mapa.set(item.productoId, actual + item.cantidad);
+    const clave = item.varianteId ? `${item.productoId}::${item.varianteId}` : item.productoId;
+    const actual = mapa.get(clave);
+    if (actual) {
+      actual.cantidad += item.cantidad;
+    } else {
+      mapa.set(clave, {
+        productoId: item.productoId,
+        varianteId: item.varianteId,
+        cantidad: item.cantidad,
+      });
+    }
   });
 
-  return Array.from(mapa.entries()).map(([productoId, cantidad]) => ({
-    productoId,
-    cantidad,
-  }));
+  return Array.from(mapa.values());
 };
 
 export const normalizarTexto = (valor?: string) => (valor ?? "").trim();

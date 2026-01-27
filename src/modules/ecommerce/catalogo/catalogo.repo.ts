@@ -13,6 +13,8 @@ export const buscarProductos = (filtros: FiltrosCatalogo) =>
     where: {
       nombre: filtros.q ? { contains: filtros.q, mode: "insensitive" } : undefined,
       tipo: filtros.tipo,
+      visibleEcommerce: true,
+      activo: true,
     },
     include: {
       Inventario: {
@@ -25,6 +27,20 @@ export const buscarProductos = (filtros: FiltrosCatalogo) =>
           url: true,
           orden: true,
         },
+      },
+      ProductoVariante: {
+        where: { activa: true },
+        select: {
+          id: true,
+          atributo: true,
+          valor: true,
+          precio: true,
+          stock: true,
+          stockMinimo: true,
+          skuVariante: true,
+          orden: true,
+        },
+        orderBy: [{ atributo: "asc" }, { orden: "asc" }, { valor: "asc" }],
       },
     },
     orderBy: {
@@ -35,8 +51,8 @@ export const buscarProductos = (filtros: FiltrosCatalogo) =>
   });
 
 export const buscarProductoPorId = (id: string) =>
-  prisma.producto.findUnique({
-    where: { id },
+  prisma.producto.findFirst({
+    where: { id, visibleEcommerce: true, activo: true },
     include: {
       Inventario: {
         select: {
@@ -48,6 +64,20 @@ export const buscarProductoPorId = (id: string) =>
           url: true,
           orden: true,
         },
+      },
+      ProductoVariante: {
+        where: { activa: true },
+        select: {
+          id: true,
+          atributo: true,
+          valor: true,
+          precio: true,
+          stock: true,
+          stockMinimo: true,
+          skuVariante: true,
+          orden: true,
+        },
+        orderBy: [{ atributo: "asc" }, { orden: "asc" }, { valor: "asc" }],
       },
     },
   });

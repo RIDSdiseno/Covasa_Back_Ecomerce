@@ -2,6 +2,17 @@ import { ProductoTipo } from "@prisma/client";
 import { ErrorApi } from "../../../lib/errores";
 import { buscarProductoPorId, buscarProductos } from "./catalogo.repo";
 
+type VarianteBase = {
+  id: string;
+  atributo: string;
+  valor: string;
+  precio: number | null;
+  stock: number;
+  stockMinimo: number;
+  skuVariante: string | null;
+  orden: number;
+};
+
 type ProductoBase = {
   id: string;
   sku: string | null;
@@ -11,13 +22,50 @@ type ProductoBase = {
   precioGeneral: number;
   precioConDescto: number;
   tipo: ProductoTipo;
+  activo: boolean;
+  tieneVariantes?: boolean;
+  precioPorVariante?: boolean;
+  noControlaStock?: boolean;
+  unidadVenta?: string | null;
+  descripcionCorta?: string | null;
+  descripcionTecnica?: string | null;
   Inventario: { stock: number } | null;
   ProductoImagen: { url: string; orden: number }[];
+  ProductoVariante?: VarianteBase[];
 };
 
 const mapearProducto = (producto: ProductoBase) => {
-  const stockDisponible = producto.Inventario?.stock ?? 0;
-  const precioNeto = producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral;
+  const variantes = producto.ProductoVariante ?? [];
+  const tieneVariantes = producto.tieneVariantes === true && variantes.length > 0;
+
+  // Calcular stock: si tiene variantes, suma de stocks de variantes; si no, stock de inventario
+  let stockDisponible: number;
+  if (tieneVariantes) {
+    stockDisponible = variantes.reduce((sum, v) => sum + v.stock, 0);
+  } else {
+    stockDisponible = producto.Inventario?.stock ?? 0;
+  }
+
+  // Calcular precio neto base (sin variantes)
+  const precioBase = producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral;
+
+  // Calcular precios min/max de variantes
+  let precioMinimo: number | undefined;
+  let precioMaximo: number | undefined;
+  let precioNeto = precioBase;
+
+  if (tieneVariantes && producto.precioPorVariante) {
+    const preciosVariantes = variantes
+      .map((v) => v.precio)
+      .filter((p): p is number => p !== null && p > 0);
+
+    if (preciosVariantes.length > 0) {
+      precioMinimo = Math.min(...preciosVariantes);
+      precioMaximo = Math.max(...preciosVariantes);
+      precioNeto = precioMinimo; // Mostrar precio mínimo como referencia
+    }
+  }
+
   const imagenes = producto.ProductoImagen
     .slice()
     .sort((a, b) => a.orden - b.orden)
@@ -33,12 +81,33 @@ const mapearProducto = (producto: ProductoBase) => {
     fotoUrl: producto.fotoUrl,
     imagenes,
     tipo: producto.tipo,
+    activo: producto.activo,
     precioNeto,
     precioLista: producto.precioGeneral,
     precioGeneral: producto.precioGeneral,
     precioConDescuento: producto.precioConDescto,
     precioConDescto: producto.precioConDescto,
     stockDisponible,
+    // Campos de variantes
+    tieneVariantes,
+    precioPorVariante: producto.precioPorVariante ?? false,
+    noControlaStock: producto.noControlaStock ?? false,
+    unidadVenta: producto.unidadVenta,
+    descripcionCorta: producto.descripcionCorta,
+    descripcionTecnica: producto.descripcionTecnica,
+    precioMinimo,
+    precioMaximo,
+    variantes: tieneVariantes
+      ? variantes.map((v) => ({
+          id: v.id,
+          atributo: v.atributo,
+          valor: v.valor,
+          precio: v.precio,
+          stock: v.stock,
+          stockMinimo: v.stockMinimo,
+          skuVariante: v.skuVariante,
+        }))
+      : undefined,
   };
 };
 

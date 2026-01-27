@@ -51,8 +51,8 @@ export const actualizarCarritoTimestamp = (id: string, tx?: DbClient) =>
   });
 
 export const buscarProductoPorId = (id: string, tx?: DbClient) =>
-  db(tx).producto.findUnique({
-    where: { id },
+  db(tx).producto.findFirst({
+    where: { id, activo: true, visibleEcommerce: true },
   });
 
 export const buscarItemPorCarritoProducto = (

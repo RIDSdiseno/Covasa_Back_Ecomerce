@@ -121,9 +121,21 @@ model Producto {
   tipo                    ProductoTipo              @default(Producto)
   fotoPublicId            String?
   skuNumero               Int                       @unique @default(autoincrement())
+  // Campos de variantes
+  tieneVariantes          Boolean                   @default(false)
+  precioPorVariante       Boolean                   @default(false)
+  noControlaStock         Boolean                   @default(false)
+  activo                  Boolean                   @default(true)
+  visibleEcommerce        Boolean                   @default(false)
+  unidadVenta             String?
+  descripcionCorta        String?
+  descripcionTecnica      String?
+  categoriaId             String?
+
   Inventario              Inventario?
   PrecioProveedor         PrecioProveedor[]
   ProductoImagen          ProductoImagen[]
+  ProductoVariante        ProductoVariante[]
   EcommerceCarritoItem    EcommerceCarritoItem[]
   EcommerceCotizacionItem EcommerceCotizacionItem[]
   EcommercePedidoItem     EcommercePedidoItem[]
@@ -131,6 +143,10 @@ model Producto {
   @@index([nombre])
   @@index([tipo])
   @@index([fotoPublicId])
+  @@index([categoriaId])
+  @@index([activo])
+  @@index([visibleEcommerce])
+  @@index([tieneVariantes])
 }
 
 model Proveedor {
@@ -208,6 +224,27 @@ model ProductoImagen {
   @@unique([productoId, publicId])
   @@index([productoId])
   @@index([publicId])
+}
+
+model ProductoVariante {
+  id          String   @id @default(uuid())
+  productoId  String
+  atributo    String
+  valor       String
+  skuVariante String?  @unique
+  precio      Int?
+  stock       Int      @default(0)
+  stockMinimo Int      @default(0)
+  orden       Int      @default(0)
+  activa      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  Producto    Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@unique([productoId, atributo, valor])
+  @@index([productoId])
+  @@index([atributo])
+  @@index([activa])
 }
 
 model CrmCotizacion {

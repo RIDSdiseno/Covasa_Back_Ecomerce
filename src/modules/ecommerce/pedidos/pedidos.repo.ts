@@ -12,7 +12,34 @@ const db = (tx?: DbClient) => tx ?? prisma;
 
 export const buscarProductosPorIds = (ids: string[], tx?: DbClient) =>
   db(tx).producto.findMany({
-    where: { id: { in: ids } },
+    where: { id: { in: ids }, activo: true, visibleEcommerce: true },
+    include: {
+      ProductoVariante: {
+        where: { activa: true },
+        select: {
+          id: true,
+          atributo: true,
+          valor: true,
+          precio: true,
+          stock: true,
+          skuVariante: true,
+        },
+      },
+    },
+  });
+
+export const buscarVariantesPorIds = (ids: string[], tx?: DbClient) =>
+  db(tx).productoVariante.findMany({
+    where: { id: { in: ids }, activa: true },
+    select: {
+      id: true,
+      productoId: true,
+      atributo: true,
+      valor: true,
+      precio: true,
+      stock: true,
+      skuVariante: true,
+    },
   });
 
 export const buscarClientePorId = (id: string, tx?: DbClient) =>
