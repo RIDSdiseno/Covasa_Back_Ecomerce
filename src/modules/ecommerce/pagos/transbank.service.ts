@@ -46,7 +46,7 @@ const resumirError = (error: unknown) => {
 };
 
 const logTransbank = (mensaje: string, datos: Record<string, unknown>) => {
-  console.log(`[Transbank] ${mensaje}`, datos);
+  console.log(`[TRANSBANK] ${mensaje}`, datos);
 };
 
 const obtenerClienteTransbank = () => {
@@ -75,11 +75,19 @@ const resolverReturnUrl = (override?: string) => {
   }
 
   const desdeEnv = normalizarTexto(process.env.TRANSBANK_RETURN_URL);
-  if (!desdeEnv) {
-    throw new ErrorApi("TRANSBANK_RETURN_URL requerido", 500);
+  if (desdeEnv) {
+    return desdeEnv;
   }
 
-  return desdeEnv;
+  const baseEnv =
+    normalizarTexto(process.env.API_URL) ||
+    normalizarTexto(process.env.BASE_URL) ||
+    normalizarTexto(process.env.BACKEND_URL);
+  if (baseEnv) {
+    return new URL("/api/ecommerce/payments/transbank/return", baseEnv).toString();
+  }
+
+  throw new ErrorApi("TRANSBANK_RETURN_URL requerido", 500);
 };
 
 const limitarLargo = (valor: string, max: number) => (valor.length <= max ? valor : valor.slice(0, max));
@@ -114,9 +122,18 @@ export const crearTransbankPagoServicio = async (payload: { pedidoId: string; re
     throw new ErrorApi("Monto de pedido invalido", 409, { total: pedido.total });
   }
 
-  logTransbank("init", { pedidoId: pedido.id, total: pedido.total });
-
   const returnUrl = resolverReturnUrl(payload.returnUrl);
+  const ambiente = normalizarTexto(process.env.TRANSBANK_ENV) || "integration";
+
+  console.log("[PAYMENT] transbank_inicio", {
+    pedidoId: pedido.id,
+    pagoId: null,
+    monto: pedido.total,
+    ambiente,
+    returnUrl,
+  });
+
+  logTransbank("init", { pedidoId: pedido.id, total: pedido.total, returnUrl });
   const buyOrder = crearBuyOrder(pedido.codigo, pedido.id);
   const sessionId = crearSessionId(pedido.id);
   const cliente = obtenerClienteTransbank();
@@ -137,6 +154,7 @@ export const crearTransbankPagoServicio = async (payload: { pedidoId: string; re
     pedidoId: pedido.id,
     buyOrder,
     token: enmascararToken(respuesta.token),
+    url: respuesta.url,
   });
 
   const gatewayPayload: GatewayPayload = {
@@ -157,12 +175,31 @@ export const crearTransbankPagoServicio = async (payload: { pedidoId: string; re
     gatewayPayloadJson: gatewayPayload as Prisma.InputJsonValue,
   });
 
+  console.log("[DB] ecommerce_pago_create", {
+    pagoId: pago.id,
+    pedidoId: pedido.id,
+    estado: pago.estado,
+  });
+
+  console.log("[CRM] notificacion_crear", {
+    pagoId: pago.id,
+    pedidoId: pedido.id,
+    tipo: "PAGO_TRANSBANK_CREADO",
+    referenciaTabla: "EcommercePago",
+  });
+
   await registrarNotificacion({
     tipo: "PAGO_TRANSBANK_CREADO",
     referenciaTabla: "EcommercePago",
     referenciaId: pago.id,
     titulo: "Pago Transbank creado",
     detalle: `Pedido ${pedido.id}. Monto ${pedido.total}.`,
+  });
+
+  console.log("[CRM] notificacion_ok", {
+    pagoId: pago.id,
+    pedidoId: pedido.id,
+    tipo: "PAGO_TRANSBANK_CREADO",
   });
 
   logTransbank("pago_registrado", {
@@ -222,10 +259,25 @@ export const confirmarTransbankPagoServicio = async (token: string) => {
   const status = String(respuesta?.status ?? "");
   const aprobado = status === "AUTHORIZED";
   const nuevoEstado = aprobado ? EcommerceEstadoPago.CONFIRMADO : EcommerceEstadoPago.RECHAZADO;
+  const responseCode =
+    typeof respuesta?.response_code === "number" ? (respuesta?.response_code as number) : undefined;
 
   const gatewayPayload = fusionarPayload(pago.gatewayPayloadJson, { commit: respuesta });
 
+  logTransbank("commit_respuesta", {
+    pagoId: pago.id,
+    pedidoId: pago.pedidoId,
+    status,
+    responseCode,
+  });
+
   const actualizado = await prisma.$transaction(async (tx) => {
+    console.log("[DB] ecommerce_pago_update_inicio", {
+      pagoId: pago.id,
+      pedidoId: pago.pedidoId,
+      estado: nuevoEstado,
+    });
+
     const pagoActualizado = await actualizarPagoDatos(
       pago.id,
       {
@@ -235,9 +287,34 @@ export const confirmarTransbankPagoServicio = async (token: string) => {
       tx
     );
 
+    console.log("[DB] ecommerce_pago_update_fin", {
+      pagoId: pago.id,
+      pedidoId: pago.pedidoId,
+      estado: pagoActualizado.estado,
+    });
+
     if (aprobado) {
+      console.log("[DB] ecommerce_pedido_update_inicio", {
+        pagoId: pago.id,
+        pedidoId: pago.pedidoId,
+        estado: EcommerceEstadoPedido.PAGADO,
+      });
+
       await actualizarPedidoEstado(pago.pedidoId, EcommerceEstadoPedido.PAGADO, tx);
+
+      console.log("[DB] ecommerce_pedido_update_fin", {
+        pagoId: pago.id,
+        pedidoId: pago.pedidoId,
+        estado: EcommerceEstadoPedido.PAGADO,
+      });
     }
+
+    console.log("[CRM] notificacion_crear", {
+      pagoId: pago.id,
+      pedidoId: pago.pedidoId,
+      tipo: aprobado ? "PAGO_CONFIRMADO" : "PAGO_RECHAZADO",
+      referenciaTabla: "EcommercePago",
+    });
 
     await registrarNotificacion({
       tipo: aprobado ? "PAGO_CONFIRMADO" : "PAGO_RECHAZADO",
@@ -248,6 +325,12 @@ export const confirmarTransbankPagoServicio = async (token: string) => {
       tx,
     });
 
+    console.log("[CRM] notificacion_ok", {
+      pagoId: pago.id,
+      pedidoId: pago.pedidoId,
+      tipo: aprobado ? "PAGO_CONFIRMADO" : "PAGO_RECHAZADO",
+    });
+
     return pagoActualizado;
   });
 
@@ -256,6 +339,7 @@ export const confirmarTransbankPagoServicio = async (token: string) => {
     pedidoId: pago.pedidoId,
     estado: nuevoEstado,
     status,
+    responseCode,
   });
 
   return {
