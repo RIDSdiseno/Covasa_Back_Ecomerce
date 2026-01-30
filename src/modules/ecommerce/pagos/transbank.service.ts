@@ -2,6 +2,7 @@ import { EcommerceEstadoPago, EcommerceEstadoPedido, EcommerceMetodoPago, Prisma
 import { IntegrationApiKeys, IntegrationCommerceCodes, WebpayPlus } from "transbank-sdk";
 import { ErrorApi } from "../../../lib/errores";
 import { prisma } from "../../../lib/prisma";
+import { logger } from "../../../lib/logger";
 import { normalizarTexto } from "../common/ecommerce.utils";
 
 import { validarTransbankEnv } from "./transbank.env";
@@ -46,7 +47,11 @@ const resumirError = (error: unknown) => {
 };
 
 const logTransbank = (mensaje: string, datos: Record<string, unknown>) => {
-  console.log(`[TRANSBANK] ${mensaje}`, datos);
+  if (mensaje.includes("error")) {
+    logger.error(`transbank_${mensaje}`, datos);
+    return;
+  }
+  logger.info(`transbank_${mensaje}`, datos);
 };
 
 const obtenerClienteTransbank = () => {
@@ -125,7 +130,7 @@ export const crearTransbankPagoServicio = async (payload: { pedidoId: string; re
   const returnUrl = resolverReturnUrl(payload.returnUrl);
   const ambiente = normalizarTexto(process.env.TRANSBANK_ENV) || "integration";
 
-  console.log("[PAYMENT] transbank_inicio", {
+  logger.info("transbank_pago_inicio", {
     pedidoId: pedido.id,
     pagoId: null,
     monto: pedido.total,
@@ -175,13 +180,13 @@ export const crearTransbankPagoServicio = async (payload: { pedidoId: string; re
     gatewayPayloadJson: gatewayPayload as Prisma.InputJsonValue,
   });
 
-  console.log("[DB] ecommerce_pago_create", {
+  logger.info("db_ecommerce_pago_create", {
     pagoId: pago.id,
     pedidoId: pedido.id,
     estado: pago.estado,
   });
 
-  console.log("[CRM] notificacion_crear", {
+  logger.info("crm_notificacion_crear", {
     pagoId: pago.id,
     pedidoId: pedido.id,
     tipo: "PAGO_TRANSBANK_CREADO",
@@ -196,7 +201,7 @@ export const crearTransbankPagoServicio = async (payload: { pedidoId: string; re
     detalle: `Pedido ${pedido.id}. Monto ${pedido.total}.`,
   });
 
-  console.log("[CRM] notificacion_ok", {
+  logger.info("crm_notificacion_ok", {
     pagoId: pago.id,
     pedidoId: pedido.id,
     tipo: "PAGO_TRANSBANK_CREADO",
@@ -272,7 +277,7 @@ export const confirmarTransbankPagoServicio = async (token: string) => {
   });
 
   const actualizado = await prisma.$transaction(async (tx) => {
-    console.log("[DB] ecommerce_pago_update_inicio", {
+    logger.info("db_ecommerce_pago_update_inicio", {
       pagoId: pago.id,
       pedidoId: pago.pedidoId,
       estado: nuevoEstado,
@@ -287,14 +292,14 @@ export const confirmarTransbankPagoServicio = async (token: string) => {
       tx
     );
 
-    console.log("[DB] ecommerce_pago_update_fin", {
+    logger.info("db_ecommerce_pago_update_fin", {
       pagoId: pago.id,
       pedidoId: pago.pedidoId,
       estado: pagoActualizado.estado,
     });
 
     if (aprobado) {
-      console.log("[DB] ecommerce_pedido_update_inicio", {
+      logger.info("db_ecommerce_pedido_update_inicio", {
         pagoId: pago.id,
         pedidoId: pago.pedidoId,
         estado: EcommerceEstadoPedido.PAGADO,
@@ -302,14 +307,14 @@ export const confirmarTransbankPagoServicio = async (token: string) => {
 
       await actualizarPedidoEstado(pago.pedidoId, EcommerceEstadoPedido.PAGADO, tx);
 
-      console.log("[DB] ecommerce_pedido_update_fin", {
+      logger.info("db_ecommerce_pedido_update_fin", {
         pagoId: pago.id,
         pedidoId: pago.pedidoId,
         estado: EcommerceEstadoPedido.PAGADO,
       });
     }
 
-    console.log("[CRM] notificacion_crear", {
+    logger.info("crm_notificacion_crear", {
       pagoId: pago.id,
       pedidoId: pago.pedidoId,
       tipo: aprobado ? "PAGO_CONFIRMADO" : "PAGO_RECHAZADO",
@@ -325,7 +330,7 @@ export const confirmarTransbankPagoServicio = async (token: string) => {
       tx,
     });
 
-    console.log("[CRM] notificacion_ok", {
+    logger.info("crm_notificacion_ok", {
       pagoId: pago.id,
       pedidoId: pago.pedidoId,
       tipo: aprobado ? "PAGO_CONFIRMADO" : "PAGO_RECHAZADO",

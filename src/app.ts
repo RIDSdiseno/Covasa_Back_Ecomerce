@@ -3,6 +3,7 @@ import cors from "cors";
 import routes from "./routes";
 import { notFound } from "./middleware/notFound";
 import { errorHandler } from "./middleware/errorHandler";
+import { requestLogger } from "./middleware/requestLogger";
 import path from "path";
 import fs from "fs";
 
@@ -105,11 +106,14 @@ app.use(
       return callback(null, false);
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-request-id", "x-integration-token"],
+    exposedHeaders: ["x-request-id"],
     credentials: true,
     optionsSuccessStatus: 204,
   })
 );
+
+app.use(requestLogger);
 
 app.options("*", (_req, res) => {
   res.sendStatus(204);

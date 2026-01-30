@@ -1,10 +1,11 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { logger } from "../../../lib/logger";
 
 const TENANT_ID = process.env.MICROSOFT_TENANT_ID || "common";
 const CLIENT_ID = process.env.MICROSOFT_CLIENT_ID;
 
 if (!CLIENT_ID) {
-  console.warn("[Microsoft] Falta MICROSOFT_CLIENT_ID en .env");
+  logger.warn("microsoft_client_id_missing", { variable: "MICROSOFT_CLIENT_ID" });
 }
 
 const issuerV2 = (tenant: string) =>

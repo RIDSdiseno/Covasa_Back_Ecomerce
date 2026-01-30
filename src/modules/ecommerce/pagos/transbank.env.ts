@@ -1,4 +1,5 @@
 import { ErrorApi } from "../../../lib/errores";
+import { logger } from "../../../lib/logger";
 import { normalizarTexto } from "../common/ecommerce.utils";
 
 const mask = (v?: string) => {
@@ -39,7 +40,7 @@ export function validarTransbankEnv() {
     throw new ErrorApi(`Faltan variables ENV para Transbank: ${faltan.join(", ")}`, 500);
   }
 
-  console.log("[Transbank] env_ok", {
+  logger.info("transbank_env_ok", {
     env: prod ? "production" : "integration",
     commerceCode: commerceCode || "(SDK integration default)",
     apiKey: mask(apiKeySecret),

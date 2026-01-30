@@ -2,6 +2,7 @@ import { EcommerceEstadoPago, EcommerceEstadoPedido, EcommerceMetodoPago, Prisma
 import PDFDocument from "pdfkit";
 import { ErrorApi } from "../../../lib/errores";
 import { prisma } from "../../../lib/prisma";
+import { logger } from "../../../lib/logger";
 import { construirDireccionLinea, normalizarTexto } from "../common/ecommerce.utils";
 import { registrarNotificacion } from "../notificaciones/notificaciones.service";
 import {
@@ -57,6 +58,14 @@ export const crearPagoServicio = async (payload: {
     return pago;
   });
 
+  logger.info("pago_creado", {
+    pagoId: resultado.id,
+    pedidoId: payload.pedidoId,
+    metodo: payload.metodo,
+    monto: payload.monto,
+    estado: resultado.estado,
+  });
+
   return resultado;
 };
 
@@ -91,6 +100,12 @@ export const confirmarPagoServicio = async (pagoId: string) => {
     return actualizado;
   });
 
+  logger.info("pago_confirmado", {
+    pagoId: resultado.id,
+    pedidoId: resultado.pedidoId,
+    estado: resultado.estado,
+  });
+
   return resultado;
 };
 
@@ -122,6 +137,12 @@ export const rechazarPagoServicio = async (pagoId: string) => {
     });
 
     return actualizado;
+  });
+
+  logger.info("pago_rechazado", {
+    pagoId: resultado.id,
+    pedidoId: resultado.pedidoId,
+    estado: resultado.estado,
   });
 
   return resultado;

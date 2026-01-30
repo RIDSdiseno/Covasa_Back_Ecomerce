@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { manejarAsync } from "../../../lib/manejarAsync";
+import { logger } from "../../../lib/logger";
 import { normalizarTexto } from "../common/ecommerce.utils";
 import { transbankCrearSchema, transbankTokenSchema } from "./transbank.schema";
 import {
@@ -104,19 +105,26 @@ const mapearRespuestaTransbank = (payload: unknown) => {
 };
 
 const obtenerFrontUrlBase = () => {
-  const candidatos = [
-    process.env.FRONT_URL,
-    process.env.ECOMMERCE_FRONT_URL
-  ];
+  const url = normalizarTexto(
+    process.env.ECOMMERCE_FRONT_URL || process.env.FRONT_URL
+  );
 
-  for (const url of candidatos) {
-    const normalizada = normalizarTexto(url);
-    if (normalizada) return normalizada;
+  if (url) return url;
+
+  if (process.env.NODE_ENV === "production") {
+    logger.error("transbank_front_url_missing", {
+      requiredEnv: "ECOMMERCE_FRONT_URL"
+    });
+    throw new Error("ECOMMERCE_FRONT_URL no está definida en producción");
   }
 
-  console.warn("[ENV] FRONT_URL no definida, usando fallback localhost:5173");
+  logger.warn("transbank_front_url_fallback_dev", {
+    fallback: "http://localhost:5173"
+  });
+
   return "http://localhost:5173";
 };
+
 
 const construirUrlResultadoFront = (payload: {
   pagoId?: string;
@@ -165,7 +173,7 @@ const construirFormularioTransbank = (url: string, token: string) => `<!doctype 
 </html>`;
 
 const enviarFormularioTransbank = (res: Response, url: string, token: string) => {
-  console.log("[REDIRECT] transbank_form_post", {
+  logger.info("transbank_form_post", {
     tokenWsPresente: Boolean(token),
     token: enmascararToken(token),
     url,
@@ -179,14 +187,14 @@ const enviarFormularioTransbank = (res: Response, url: string, token: string) =>
 // Input: { pedidoId, returnUrl? }. Output: redireccion a Webpay (HTML) o JSON si se solicita.
 export const crearTransbankPago = manejarAsync(async (req: Request, res: Response) => {
   const payload = transbankCrearSchema.parse(req.body);
-  console.log("[PAYMENT] transbank_create_inicio", {
+  logger.info("transbank_create_inicio", {
     pedidoId: payload.pedidoId,
     returnUrl: payload.returnUrl ?? null,
   });
   const resultado = await crearTransbankPagoServicio(payload);
   const aceptaHtml = (req.headers.accept || "").includes("text/html");
 
-  console.log("[TRANSBANK] create_respuesta", {
+  logger.info("transbank_create_respuesta", {
     pedidoId: payload.pedidoId,
     pagoId: resultado.pagoId,
     url: resultado.url,
@@ -213,11 +221,11 @@ export const crearTransbankPago = manejarAsync(async (req: Request, res: Respons
 // Input: { token } o token_ws. Output: estado y resumen Transbank (sin token).
 export const confirmarTransbankPago = manejarAsync(async (req: Request, res: Response) => {
   const token = extraerToken(req);
-  console.log("[TRANSBANK] commit_request", { metodo: req.method, token: enmascararToken(token) });
+  logger.info("transbank_commit_request", { metodo: req.method, token: enmascararToken(token) });
   const resultado = await confirmarTransbankPagoServicio(token);
   const transbank = mapearRespuestaTransbank(resultado.resultado);
 
-  console.log("[TRANSBANK] commit_response", {
+  logger.info("transbank_commit_response", {
     pagoId: resultado.pago.id,
     pedidoId: resultado.pago.pedidoId,
     estado: resultado.estado,
@@ -240,11 +248,11 @@ export const confirmarTransbankPago = manejarAsync(async (req: Request, res: Res
 // Output: estado remoto de Transbank.
 export const obtenerEstadoTransbank = manejarAsync(async (req: Request, res: Response) => {
   const token = transbankTokenSchema.parse(req.params).token;
-  console.log("[TRANSBANK] status_request", { token: enmascararToken(token) });
+  logger.info("transbank_status_request", { token: enmascararToken(token) });
   const estado = await obtenerEstadoTransbankServicio(token);
   const resumen = mapearRespuestaTransbank(estado);
 
-  console.log("[TRANSBANK] status_response", {
+  logger.info("transbank_status_response", {
     token: enmascararToken(token),
     status: resumen?.status,
     responseCode: resumen?.responseCode,
@@ -263,7 +271,7 @@ export const recibirRetornoTransbank = manejarAsync(async (req: Request, res: Re
   const tokenWs = obtenerTokenWs(req);
   const tbkParams = extraerParametrosTbk(req);
 
-  console.log("[TRANSBANK] return_recepcion", {
+  logger.info("transbank_return_recepcion", {
     metodo: req.method,
     tokenWsPresente: Boolean(tokenWs && String(tokenWs).trim().length > 0),
     token: enmascararToken(token),
@@ -271,13 +279,13 @@ export const recibirRetornoTransbank = manejarAsync(async (req: Request, res: Re
   });
 
   if (!token || token.trim().length === 0) {
-    console.log("[TRANSBANK] return_token_invalido", { token: enmascararToken(token) });
+    logger.warn("transbank_return_token_invalido", { token: enmascararToken(token) });
     const redirectUrl = construirUrlResultadoFront({
       estado: "ERROR",
       status: "failed",
     });
     const destino = `${redirectUrl}&reason=missing_token`;
-    console.log("[REDIRECT] transbank_return_redirect", {
+    logger.info("transbank_return_redirect", {
       destino,
       params: { estado: "ERROR", status: "failed", reason: "missing_token" },
     });
@@ -297,7 +305,7 @@ export const recibirRetornoTransbank = manejarAsync(async (req: Request, res: Re
       tbkStatus: transbank?.status,
     });
 
-    console.log("[REDIRECT] transbank_return_redirect", {
+    logger.info("transbank_return_redirect", {
       destino: redirectUrl,
       params: {
         pagoId: resultado.pago.id,
@@ -311,7 +319,10 @@ export const recibirRetornoTransbank = manejarAsync(async (req: Request, res: Re
     res.redirect(302, redirectUrl);
     return;
   } catch (error) {
-    console.log("[TRANSBANK] return_error", { token: enmascararToken(token), error: resumirError(error) });
+    logger.error("transbank_return_error", {
+      token: enmascararToken(token),
+      error: resumirError(error),
+    });
     const pago = await buscarPagoPorReferencia(token).catch(() => null);
     const redirectUrl = construirUrlResultadoFront({
       pagoId: pago?.id,
@@ -319,7 +330,7 @@ export const recibirRetornoTransbank = manejarAsync(async (req: Request, res: Re
       estado: "ERROR",
       status: "failed",
     });
-    console.log("[REDIRECT] transbank_return_redirect", {
+    logger.info("transbank_return_redirect", {
       destino: redirectUrl,
       params: {
         pagoId: pago?.id,
