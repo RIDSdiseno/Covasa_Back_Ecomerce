@@ -523,7 +523,6 @@ export const generarPagoPdfServicio = async (usuarioId: string, pagoId: string) 
     throw new ErrorApi("Pago no encontrado", 404, { id: pagoId });
   }
 
-  const moneda = extraerMonedaPago(pago.gatewayPayloadJson);
   const proveedor = construirProveedorPago(pago);
   const nombreCliente = [pago.pedido.ecommerceCliente?.nombres, pago.pedido.ecommerceCliente?.apellidos]
     .filter(Boolean)
@@ -540,8 +539,8 @@ export const generarPagoPdfServicio = async (usuarioId: string, pagoId: string) 
     doc.on("error", (error) => reject(error));
 
     const margin = 32;
-    const headerHeight = 72;
-    const footerHeight = 60;
+    const headerHeight = 96;
+    const footerHeight = 90;
     let pageNumber = 1;
     let cursorY = 0;
 
@@ -555,44 +554,54 @@ export const generarPagoPdfServicio = async (usuarioId: string, pagoId: string) 
       doc.font(font).fontSize(size).fillColor(color);
     };
 
-    const drawHeader = () => {
-      const top = margin;
-      if (logoBuffer) {
-        doc.image(logoBuffer, margin, top + 2, { fit: [120, 40] });
-      } else {
-        setTextStyle("Helvetica-Bold", 16, PDF_PRIMARY_COLOR);
-        doc.text(PDF_COMPANY.name || "COVASA", margin, top + 10);
-      }
-
-      setTextStyle("Helvetica-Bold", 18, PDF_PRIMARY_COLOR);
-      doc.text("Recibo de Pago", margin, top + 4, { width: contentWidth(), align: "right" });
-      setTextStyle("Helvetica", 9, PDF_MUTED_COLOR);
-      doc.text(`Folio: ${pago.id}`, margin, top + 26, { width: contentWidth(), align: "right" });
-      doc.text(`Pedido: ${pago.pedido.codigo || pago.pedido.id}`, margin, top + 38, {
-        width: contentWidth(),
-        align: "right",
-      });
-
-      const lineY = top + headerHeight - 8;
+    const drawLine = (y: number) => {
       doc
         .strokeColor(PDF_LINE_COLOR)
-        .lineWidth(0.5)
-        .moveTo(margin, lineY)
-        .lineTo(pageWidth() - margin, lineY)
+        .lineWidth(0.6)
+        .moveTo(margin, y)
+        .lineTo(pageWidth() - margin, y)
         .stroke();
     };
 
+    const drawHeader = () => {
+      const top = margin;
+      if (logoBuffer) {
+        doc.image(logoBuffer, margin, top + 6, { fit: [160, 60] });
+      } else {
+        setTextStyle("Helvetica-Bold", 18, PDF_PRIMARY_COLOR);
+        doc.text(PDF_COMPANY.name || "COVASA", margin, top + 18);
+      }
+
+      setTextStyle("Helvetica-Bold", 22, PDF_PRIMARY_COLOR);
+      doc.text("RECIBO DE PAGO", margin, top + 6, { width: contentWidth(), align: "right" });
+      setTextStyle("Helvetica", 9, PDF_MUTED_COLOR);
+      doc.text(`Recibo No: ${pago.id}`, margin, top + 34, { width: contentWidth(), align: "right" });
+      doc.text(`Fecha: ${formatDateCl(pago.createdAt)}`, margin, top + 46, { width: contentWidth(), align: "right" });
+
+      drawLine(top + headerHeight - 8);
+    };
+
     const drawFooter = (page: number) => {
-      const lineY = pageHeight() - margin - footerHeight + 8;
+      const footerTop = pageHeight() - margin - footerHeight;
+      const lineY = footerTop + 8;
       const previousX = doc.x;
       const previousY = doc.y;
       doc.save();
-      doc
-        .strokeColor(PDF_LINE_COLOR)
-        .lineWidth(0.5)
-        .moveTo(margin, lineY)
-        .lineTo(pageWidth() - margin, lineY)
-        .stroke();
+      drawLine(lineY);
+
+      setTextStyle("Helvetica-Bold", 9, PDF_TEXT_COLOR);
+      doc.text("Gracias por tu compra.", margin, lineY + 6, { width: contentWidth() });
+
+      const noteLines = PDF_RECEIPT_NOTES
+        ? PDF_RECEIPT_NOTES.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+        : [];
+      const footerNotes = [...noteLines, `Forma de pago: ${pago.metodo}`].filter(Boolean).slice(0, 3);
+      setTextStyle("Helvetica", 8, PDF_MUTED_COLOR);
+      let notesY = lineY + 18;
+      footerNotes.forEach((note) => {
+        doc.text(note, margin, notesY, { width: contentWidth() - 60, align: "left" });
+        notesY += 10;
+      });
 
       const footerParts = [
         PDF_COMPANY.name,
@@ -604,11 +613,11 @@ export const generarPagoPdfServicio = async (usuarioId: string, pagoId: string) 
       ].filter(Boolean);
 
       setTextStyle("Helvetica", 8, PDF_MUTED_COLOR);
-      doc.text(footerParts.join(" | "), margin, lineY + 8, {
+      doc.text(footerParts.join(" | "), margin, pageHeight() - margin - 14, {
         width: contentWidth() - 50,
         align: "left",
       });
-      doc.text(`Página ${page}`, margin, lineY + 8, { width: contentWidth(), align: "right" });
+      doc.text(`Pagina ${page}`, margin, pageHeight() - margin - 14, { width: contentWidth(), align: "right" });
       doc.restore();
       doc.x = previousX;
       doc.y = previousY;
@@ -626,227 +635,255 @@ export const generarPagoPdfServicio = async (usuarioId: string, pagoId: string) 
       return false;
     };
 
-    const drawSectionTitle = (title: string) => {
-      ensureSpace(26);
-      setTextStyle("Helvetica-Bold", 12, PDF_PRIMARY_COLOR);
-      doc.text(title, margin, cursorY);
-      cursorY += 16;
-      doc
-        .strokeColor(PDF_LINE_COLOR)
-        .lineWidth(0.5)
-        .moveTo(margin, cursorY)
-        .lineTo(pageWidth() - margin, cursorY)
-        .stroke();
-      cursorY += 12;
-    };
-
-    const drawKeyValueColumn = (
-      items: Array<{ label: string; value?: string | null }>,
+    const drawInfoBox = (
+      title: string,
       x: number,
       y: number,
-      width: number
+      width: number,
+      height: number,
+      lines: string[]
     ) => {
-      let currentY = y;
-      items.forEach((item) => {
-        const value = (item.value ?? "").trim();
-        if (!value) {
-          return;
-        }
-        setTextStyle("Helvetica", 8, PDF_MUTED_COLOR);
-        doc.text(item.label.toUpperCase(), x, currentY, { width });
-        currentY += 10;
-        setTextStyle("Helvetica", 10, PDF_TEXT_COLOR);
-        const height = doc.heightOfString(value, { width });
-        doc.text(value, x, currentY, { width });
-        currentY += height + 8;
-      });
-      return currentY;
+      doc.save();
+      doc
+        .lineWidth(0.6)
+        .strokeColor(PDF_LINE_COLOR)
+        .fillColor(PDF_HEADER_FILL)
+        .rect(x, y, width, height)
+        .fillAndStroke();
+
+      setTextStyle("Helvetica-Bold", 9, PDF_PRIMARY_COLOR);
+      doc.text(title, x + 8, y + 8, { width: width - 16 });
+
+      setTextStyle("Helvetica", 9, PDF_TEXT_COLOR);
+      const content = lines.join("\n");
+      doc.text(content, x + 8, y + 24, { width: width - 16 });
+      doc.restore();
     };
 
-    const drawKeyValueColumns = (
-      left: Array<{ label: string; value?: string | null }>,
-      right: Array<{ label: string; value?: string | null }>
-    ) => {
-      const colGap = 16;
-      const colWidth = (contentWidth() - colGap) / 2;
-      const estimated = Math.max(left.length, right.length) * 22 + 8;
-      ensureSpace(estimated);
-      const startY = cursorY;
-      const leftEnd = drawKeyValueColumn(left, margin, startY, colWidth);
-      const rightEnd = drawKeyValueColumn(right, margin + colWidth + colGap, startY, colWidth);
-      cursorY = Math.max(leftEnd, rightEnd) + 4;
+    const drawInfoBoxes = () => {
+      const direccionLine = pago.pedido.direccion
+        ? construirDireccionLinea(
+            pago.pedido.direccion.calle,
+            pago.pedido.direccion.numero,
+            pago.pedido.direccion.depto
+          )
+        : "";
+
+      const comunaRegion = pago.pedido.direccion
+        ? [pago.pedido.direccion.comuna, pago.pedido.direccion.region].filter(Boolean).join(", ")
+        : "";
+
+      const clienteLines = [
+        nombreCliente || pago.pedido.direccion?.nombreRecibe || "",
+        direccionLine,
+        comunaRegion,
+        pago.pedido.direccion?.telefonoRecibe || pago.pedido.ecommerceCliente?.telefono || "",
+        pago.pedido.direccion?.email || pago.pedido.ecommerceCliente?.emailContacto || "",
+      ].map((line) => line.trim()).filter(Boolean);
+
+      const detalleLines = [
+        `Recibo No: ${pago.id}`,
+        `Fecha: ${formatDateCl(pago.createdAt)}`,
+        `Pedido: ${pago.pedido.codigo || pago.pedido.id}`,
+        `Estado: ${pago.estado}`,
+      ].filter(Boolean);
+
+      const transbank = proveedor.transbank;
+      const pagoLines = [
+        `Metodo: ${pago.metodo}`,
+        proveedor.referencia ? `Referencia: ${proveedor.referencia}` : "",
+        transbank?.authorizationCode ? `Autorizacion: ${transbank.authorizationCode}` : "",
+        transbank?.paymentTypeCode ? `Tipo pago: ${transbank.paymentTypeCode}` : "",
+        transbank?.cardNumber ? `Tarjeta: ${transbank.cardNumber}` : "",
+      ].filter(Boolean);
+
+      const padding = 8;
+      const boxGap = 12;
+      const boxWidth = (contentWidth() - boxGap * 2) / 3;
+
+      setTextStyle("Helvetica", 9, PDF_TEXT_COLOR);
+      const clienteHeight = doc.heightOfString(clienteLines.join("\n"), { width: boxWidth - padding * 2 });
+      const detalleHeight = doc.heightOfString(detalleLines.join("\n"), { width: boxWidth - padding * 2 });
+      const pagoHeight = doc.heightOfString(pagoLines.join("\n"), { width: boxWidth - padding * 2 });
+      const titleHeight = 12;
+      const boxHeight = Math.max(clienteHeight, detalleHeight, pagoHeight) + padding * 2 + titleHeight + 6;
+
+      ensureSpace(boxHeight + 10);
+
+      const boxY = cursorY;
+      const box1X = margin;
+      const box2X = margin + boxWidth + boxGap;
+      const box3X = margin + (boxWidth + boxGap) * 2;
+
+      drawInfoBox("Enviar a", box1X, boxY, boxWidth, boxHeight, clienteLines);
+      drawInfoBox("Detalle", box2X, boxY, boxWidth, boxHeight, detalleLines);
+      drawInfoBox("Pago", box3X, boxY, boxWidth, boxHeight, pagoLines);
+
+      cursorY += boxHeight + 16;
     };
 
     const drawTableHeader = (columns: Array<{ label: string; width: number }>) => {
-      const height = 20;
+      const height = 22;
       ensureSpace(height + 6);
       doc.save();
-      doc.fillColor(PDF_HEADER_FILL).rect(margin, cursorY, contentWidth(), height).fill();
+      doc
+        .fillColor(PDF_HEADER_FILL)
+        .strokeColor(PDF_LINE_COLOR)
+        .lineWidth(0.6)
+        .rect(margin, cursorY, contentWidth(), height)
+        .fillAndStroke();
       doc.restore();
+
       setTextStyle("Helvetica-Bold", 9, PDF_MUTED_COLOR);
       let x = margin;
-      const textY = cursorY + 6;
-      columns.forEach((column) => {
-        doc.text(column.label, x + 4, textY, { width: column.width - 8, align: "left" });
+      const textY = cursorY + 7;
+      columns.forEach((column, index) => {
+        doc.text(column.label, x + 6, textY, { width: column.width - 12, align: "left" });
+        if (index < columns.length - 1) {
+          doc
+            .strokeColor(PDF_LINE_COLOR)
+            .lineWidth(0.6)
+            .moveTo(x + column.width, cursorY)
+            .lineTo(x + column.width, cursorY + height)
+            .stroke();
+        }
         x += column.width;
       });
       cursorY += height;
-      doc
-        .strokeColor(PDF_LINE_COLOR)
-        .lineWidth(0.5)
-        .moveTo(margin, cursorY)
-        .lineTo(pageWidth() - margin, cursorY)
-        .stroke();
-      cursorY += 6;
     };
 
     const drawTableRow = (
-      columns: Array<{ key: string; width: number; align?: "left" | "right" }>,
+      columns: Array<{ key: string; width: number; align?: "left" | "right" | "center" }>,
       values: Record<string, string>,
+      rowIndex: number,
       onPageBreak: () => void
     ) => {
       const padding = 6;
       const detalle = values.detalle ?? "";
       setTextStyle("Helvetica", 9, PDF_TEXT_COLOR);
-      const detalleHeight = doc.heightOfString(detalle, { width: columns[0].width - padding * 2 });
-      const rowHeight = Math.max(detalleHeight, 10) + padding * 2;
-      const broke = ensureSpace(rowHeight + 2);
+      const detalleHeight = doc.heightOfString(detalle, { width: columns[1].width - padding * 2 });
+      const rowHeight = Math.max(detalleHeight, 12) + padding * 2;
+      const broke = ensureSpace(rowHeight + 4);
       if (broke) {
         onPageBreak();
       }
+
+      if (rowIndex % 2 === 0) {
+        doc.save();
+        doc.fillColor("#FAFAFA").rect(margin, cursorY, contentWidth(), rowHeight).fill();
+        doc.restore();
+      }
+
+      doc.save();
+      doc
+        .strokeColor(PDF_LINE_COLOR)
+        .lineWidth(0.6)
+        .rect(margin, cursorY, contentWidth(), rowHeight)
+        .stroke();
+      doc.restore();
+
       let x = margin;
-      const textY = cursorY + padding;
-      columns.forEach((column) => {
+      columns.forEach((column, index) => {
+        if (index < columns.length - 1) {
+          doc
+            .strokeColor(PDF_LINE_COLOR)
+            .lineWidth(0.6)
+            .moveTo(x + column.width, cursorY)
+            .lineTo(x + column.width, cursorY + rowHeight)
+            .stroke();
+        }
         const value = values[column.key] ?? "";
-        setTextStyle("Helvetica", 9, PDF_TEXT_COLOR);
-        doc.text(value, x + padding, textY, {
+        const align = column.align ?? "left";
+        doc.text(value, x + padding, cursorY + padding, {
           width: column.width - padding * 2,
-          align: column.align ?? "left",
+          align,
         });
         x += column.width;
       });
+
       cursorY += rowHeight;
-      doc
-        .strokeColor(PDF_LINE_COLOR)
-        .lineWidth(0.5)
-        .moveTo(margin, cursorY)
-        .lineTo(pageWidth() - margin, cursorY)
-        .stroke();
-      cursorY += 4;
     };
 
     drawHeader();
     cursorY = contentTop();
 
-    const direccionLine = pago.pedido.direccion
-      ? construirDireccionLinea(
-          pago.pedido.direccion.calle,
-          pago.pedido.direccion.numero,
-          pago.pedido.direccion.depto
-        )
-      : "";
+    drawInfoBoxes();
 
-    const comunaRegion = pago.pedido.direccion
-      ? [pago.pedido.direccion.comuna, pago.pedido.direccion.region].filter(Boolean).join(", ")
-      : "";
+    setTextStyle("Helvetica-Bold", 11, PDF_PRIMARY_COLOR);
+    doc.text("Detalle del pedido", margin, cursorY);
+    cursorY += 16;
 
-    drawSectionTitle("Cliente y Orden");
-    drawKeyValueColumns(
-      [
-        { label: "Cliente", value: nombreCliente || pago.pedido.direccion?.nombreRecibe || "" },
-        { label: "Email", value: pago.pedido.ecommerceCliente?.emailContacto || pago.pedido.direccion?.email || "" },
-        { label: "Teléfono", value: pago.pedido.ecommerceCliente?.telefono || pago.pedido.direccion?.telefonoRecibe || "" },
-        { label: "Dirección", value: direccionLine },
-        { label: "Comuna / Región", value: comunaRegion },
-      ],
-      [
-        { label: "Pedido", value: pago.pedido.codigo || pago.pedido.id },
-        { label: "Estado pedido", value: pago.pedido.estado },
-        { label: "Fecha pedido", value: formatDateCl(pago.pedido.createdAt) },
-      ]
-    );
-
-    const transbank = proveedor.transbank;
-    const transLeft = [
-      { label: "Pago ID", value: pago.id },
-      { label: "Estado pago", value: pago.estado },
-      { label: "Método", value: pago.metodo },
-      { label: "Referencia", value: proveedor.referencia || "" },
-    ];
-    if (transbank?.authorizationCode) transLeft.push({ label: "Autorización", value: transbank.authorizationCode });
-    if (transbank?.paymentTypeCode) transLeft.push({ label: "Tipo de pago", value: transbank.paymentTypeCode });
-    if (transbank?.cardNumber) transLeft.push({ label: "Tarjeta", value: transbank.cardNumber });
-
-    const transRight = [
-      { label: "Monto", value: formatCurrency(pago.monto) },
-      { label: "Moneda", value: moneda ? moneda.toUpperCase() : "CLP" },
-      { label: "Fecha pago", value: formatDateCl(pago.createdAt) },
-      { label: "Actualizado", value: formatDateCl(pago.updatedAt) },
-    ];
-    if (transbank?.transactionDate) {
-      transRight.push({ label: "Fecha Transbank", value: formatDateCl(transbank.transactionDate) });
-    }
-
-    drawSectionTitle("Transacción");
-    drawKeyValueColumns(transLeft, transRight);
-
-    drawSectionTitle("Resumen del pedido");
-    const totalsWidth = 240;
-    ensureSpace(80);
-    const totalsX = pageWidth() - margin - totalsWidth;
-    const totalLines = [
-      { label: "Subtotal neto", value: formatCurrency(pago.pedido.subtotalNeto || 0) },
-      { label: "IVA", value: formatCurrency(pago.pedido.iva || 0) },
-      { label: "Total", value: formatCurrency(pago.pedido.total || pago.monto) },
-    ];
-    totalLines.forEach((line) => {
-      const labelWidth = totalsWidth * 0.55;
-      setTextStyle("Helvetica", 9, PDF_MUTED_COLOR);
-      doc.text(line.label, totalsX, cursorY, { width: labelWidth, align: "left" });
-      setTextStyle("Helvetica-Bold", line.label === "Total" ? 11 : 10, PDF_TEXT_COLOR);
-      doc.text(line.value, totalsX + labelWidth, cursorY, {
-        width: totalsWidth - labelWidth,
-        align: "right",
-      });
-      cursorY += 16;
-    });
-    cursorY += 4;
-
-    drawSectionTitle("Detalle de items");
-
-    if (pago.pedido.items.length === 0) {
+    const items = pago.pedido.items ?? [];
+    if (items.length === 0) {
       setTextStyle("Helvetica", 10, PDF_MUTED_COLOR);
       doc.text("No hay items asociados al pedido.", margin, cursorY, { width: contentWidth() });
       cursorY += 16;
     } else {
       const columns = [
-        { key: "detalle", label: "Producto", width: 301 },
-        { key: "cantidad", label: "Cant.", width: 50 },
-        { key: "unitario", label: "P. unitario", width: 90 },
-        { key: "subtotal", label: "Subtotal", width: 90 },
+        { key: "cantidad", label: "Cant.", width: 50, align: "center" as const },
+        { key: "detalle", label: "Descripcion", width: 281, align: "left" as const },
+        { key: "unitario", label: "P. Unitario", width: 100, align: "right" as const },
+        { key: "importe", label: "Importe", width: 100, align: "right" as const },
       ];
       const headerColumns = columns.map((col) => ({ label: col.label, width: col.width }));
       const drawHeaderRow = () => drawTableHeader(headerColumns);
 
       drawHeaderRow();
 
-      pago.pedido.items.forEach((item) => {
+      items.forEach((item, index) => {
         drawTableRow(
           columns.map((col) => ({
             key: col.key,
             width: col.width,
-            align: col.key === "detalle" ? "left" : "right",
+            align: col.align,
           })),
           {
             detalle: item.descripcionSnapshot,
             cantidad: String(item.cantidad),
             unitario: formatCurrency(item.precioUnitarioNetoSnapshot),
-            subtotal: formatCurrency(item.subtotalNetoSnapshot ?? item.totalSnapshot),
+            importe: formatCurrency(item.subtotalNetoSnapshot ?? item.totalSnapshot),
           },
+          index,
           drawHeaderRow
         );
       });
     }
+
+    cursorY += 10;
+
+    const totalsWidth = 220;
+    const totalLines = [
+      { label: "Subtotal", value: formatCurrency(pago.pedido.subtotalNeto || 0) },
+      { label: "Impuestos", value: formatCurrency(pago.pedido.iva || 0) },
+      { label: "Total pagado", value: formatCurrency(pago.pedido.total || pago.monto) },
+    ];
+    const totalsHeight = totalLines.length * 16 + 28;
+    ensureSpace(totalsHeight + 6);
+    const totalsX = pageWidth() - margin - totalsWidth;
+    const totalsY = cursorY;
+
+    doc.save();
+    doc
+      .lineWidth(0.6)
+      .strokeColor(PDF_LINE_COLOR)
+      .fillColor(PDF_HEADER_FILL)
+      .rect(totalsX, totalsY, totalsWidth, totalsHeight)
+      .fillAndStroke();
+    doc.restore();
+
+    setTextStyle("Helvetica-Bold", 10, PDF_PRIMARY_COLOR);
+    doc.text("Totales", totalsX + 10, totalsY + 8, { width: totalsWidth - 20 });
+
+    let currentY = totalsY + 24;
+    totalLines.forEach((line) => {
+      setTextStyle("Helvetica", 9, PDF_MUTED_COLOR);
+      doc.text(line.label, totalsX + 10, currentY, { width: totalsWidth - 20, align: "left" });
+      setTextStyle("Helvetica-Bold", line.label === "Total pagado" ? 11 : 10, PDF_TEXT_COLOR);
+      doc.text(line.value, totalsX + 10, currentY, { width: totalsWidth - 20, align: "right" });
+      currentY += 14;
+    });
+
+    cursorY += totalsHeight + 6;
 
     drawFooter(pageNumber);
     doc.end();
