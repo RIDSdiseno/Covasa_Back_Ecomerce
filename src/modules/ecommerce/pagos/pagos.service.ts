@@ -236,6 +236,7 @@ const PDF_COMPANY = {
   email: (process.env.PDF_COMPANY_EMAIL || "").trim(),
   website: (process.env.PDF_COMPANY_WEBSITE || "").trim(),
 };
+const PDF_RECEIPT_NOTES = (process.env.PDF_RECEIPT_NOTES || "").trim();
 
 let logoCache: Buffer | null = null;
 let logoPromise: Promise<Buffer | null> | null = null;
@@ -314,7 +315,7 @@ const resolveLogoBuffer = async () => {
   }
 };
 
-const formatCurrency = (value: number) => `$ ${Math.round(value).toLocaleString("es-CL")}`;
+const formatCurrency = (value: number) => `CLP ${Math.round(value).toLocaleString("es-CL")}`;
 
 const formatDateCl = (value: Date | string | null | undefined) => {
   if (!value) {
