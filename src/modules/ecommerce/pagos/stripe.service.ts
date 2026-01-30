@@ -17,6 +17,7 @@ import {
   buscarPedidoParaPago,
   crearPago,
 } from "./pagos.repo";
+import { notificarPagoConfirmadoCRM } from "./crm-notificacion";
 
 type StripeConfig = {
   secretKey: string;
@@ -340,6 +341,20 @@ const actualizarPagoStripeDesdeIntent = async (
 
     return pagoActualizado;
   });
+
+  // Notificar al CRM para descontar inventario si fue aprobado
+  // IMPORTANTE: El pago ya está confirmado en Stripe, no rechazamos si el CRM falla
+  if (estadoMap.aprobado) {
+    notificarPagoConfirmadoCRM(pago.pedidoId, pago.id).catch((error) => {
+      // Log con nivel de urgencia para que sea visible en monitoreo
+      console.error("[STRIPE] ⚠️ ALERTA: Falló notificación al CRM (el pago SÍ fue confirmado)", {
+        pagoId: pago.id,
+        pedidoId: pago.pedidoId,
+        error: error instanceof Error ? error.message : String(error),
+        accion: "REQUIERE_REVISION_MANUAL - Verificar que el stock fue descontado en CRM",
+      });
+    });
+  }
 
   return construirResumenStripe(actualizado);
 };
