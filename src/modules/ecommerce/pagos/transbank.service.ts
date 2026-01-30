@@ -113,7 +113,11 @@ const fusionarPayload = (actual: unknown, extra: GatewayPayload) => {
 };
 
 // Crea una transaccion en Transbank y registra el pago en EcommercePago.
-export const crearTransbankPagoServicio = async (payload: { pedidoId: string; returnUrl?: string }) => {
+export const crearTransbankPagoServicio = async (payload: {
+  pedidoId: string;
+  returnUrl?: string;
+  frontUrl?: string;
+}) => {
   const pedido = await buscarPedidoParaPago(payload.pedidoId);
   if (!pedido) {
     throw new ErrorApi("Pedido no encontrado", 404, { id: payload.pedidoId });
@@ -128,6 +132,7 @@ export const crearTransbankPagoServicio = async (payload: { pedidoId: string; re
   }
 
   const returnUrl = resolverReturnUrl(payload.returnUrl);
+  const frontUrl = normalizarTexto(payload.frontUrl);
   const ambiente = normalizarTexto(process.env.TRANSBANK_ENV) || "integration";
 
   logger.info("transbank_pago_inicio", {
@@ -136,6 +141,7 @@ export const crearTransbankPagoServicio = async (payload: { pedidoId: string; re
     monto: pedido.total,
     ambiente,
     returnUrl,
+    frontUrl: frontUrl || null,
   });
 
   logTransbank("init", { pedidoId: pedido.id, total: pedido.total, returnUrl });
@@ -170,6 +176,9 @@ export const crearTransbankPagoServicio = async (payload: { pedidoId: string; re
       response: respuesta,
     },
   };
+  if (frontUrl) {
+    gatewayPayload.front = { url: frontUrl };
+  }
 
   const pago = await crearPago({
     pedido: { connect: { id: pedido.id } },
