@@ -16,6 +16,7 @@ import {
   buscarPedidoParaPago,
   crearPago,
 } from "./pagos.repo";
+import { notificarPagoConfirmadoCRM } from "./crm-notificacion";
  
 type GatewayPayload = Record<string, unknown>;
 
@@ -346,6 +347,19 @@ export const confirmarTransbankPagoServicio = async (token: string) => {
     status,
     responseCode,
   });
+
+  // Notificar al CRM para descontar inventario si fue aprobado
+  // IMPORTANTE: El pago ya está confirmado en Transbank, no rechazamos si el CRM falla
+  if (aprobado) {
+    notificarPagoConfirmadoCRM(pago.pedidoId, pago.id).catch((error) => {
+      logger.error("[TRANSBANK] ⚠️ Falló notificación al CRM (el pago SÍ fue confirmado)", {
+        pagoId: pago.id,
+        pedidoId: pago.pedidoId,
+        error: error instanceof Error ? error.message : String(error),
+        accion: "REQUIERE_REVISION_MANUAL - Verificar que el stock fue descontado en CRM",
+      });
+    });
+  }
 
   return {
     pago: actualizado,

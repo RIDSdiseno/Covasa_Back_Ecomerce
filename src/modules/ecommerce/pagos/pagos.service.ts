@@ -17,6 +17,7 @@ import {
   obtenerPagoParaRecibo,
 } from "./pagos.repo";
 import { buscarUsuarioPorId } from "../usuarios/usuarios.repo";
+import { notificarPagoConfirmadoCRM } from "./crm-notificacion";
 
 // Crea un pago PENDIENTE asociado a un pedido.
 export const crearPagoServicio = async (payload: {
@@ -104,6 +105,17 @@ export const confirmarPagoServicio = async (pagoId: string) => {
     pagoId: resultado.id,
     pedidoId: resultado.pedidoId,
     estado: resultado.estado,
+  });
+
+  // Notificar al CRM para descontar inventario (async, no bloquea el flujo del pago)
+  // IMPORTANTE: El pago ya está confirmado, no rechazamos la transacción si el CRM falla
+  notificarPagoConfirmadoCRM(resultado.pedidoId, resultado.id).catch((error) => {
+    logger.error("[PAGO_CONFIRMADO] ⚠️ Falló notificación al CRM (el pago SÍ fue confirmado)", {
+      pagoId: resultado.id,
+      pedidoId: resultado.pedidoId,
+      error: error instanceof Error ? error.message : String(error),
+      accion: "REQUIERE_REVISION_MANUAL - Verificar que el stock fue descontado en CRM",
+    });
   });
 
   return resultado;
