@@ -104,36 +104,100 @@ const mapearRespuestaTransbank = (payload: unknown) => {
   };
 };
 
-const obtenerFrontUrlBase = () => {
-  const url = normalizarTexto(
-    process.env.ECOMMERCE_FRONT_URL || process.env.FRONT_URL
-  );
+const defaultAllowedOrigins = [
+  "http://localhost:3001",
+  "http://127.0.0.1:3001",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://covasachile.cl",
+  "https://www.covasachile.cl",
+];
 
-  if (url) return url;
+const leerAllowedOrigins = () => {
+  const envAllowed = (process.env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((origin) => normalizarTexto(origin).toLowerCase())
+    .filter(Boolean);
+  return new Set([...defaultAllowedOrigins.map((origin) => origin.toLowerCase()), ...envAllowed]);
+};
+
+const normalizarBaseUrl = (raw?: string) => {
+  const valor = normalizarTexto(raw);
+  if (!valor) return null;
+  try {
+    const parsed = new URL(valor);
+    const path = parsed.pathname && parsed.pathname !== "/" ? parsed.pathname.replace(/\/$/, "") : "";
+    return {
+      base: `${parsed.origin}${path}`,
+      origin: parsed.origin.toLowerCase(),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const extraerFrontUrlSolicitud = (req: Request) => {
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+  const referer = typeof req.headers.referer === "string" ? req.headers.referer : undefined;
+  return origin || referer;
+};
+
+const extraerFrontUrlGateway = (gatewayPayload: unknown) => {
+  if (!gatewayPayload || typeof gatewayPayload !== "object") {
+    return undefined;
+  }
+  const payload = gatewayPayload as { front?: unknown };
+  if (!payload.front || typeof payload.front !== "object") {
+    return undefined;
+  }
+  const url = (payload.front as { url?: unknown }).url;
+  return typeof url === "string" ? url : undefined;
+};
+
+const obtenerFrontUrlBase = (override?: string) => {
+  const allowlist = leerAllowedOrigins();
+  const overrideParsed = normalizarBaseUrl(override);
+
+  if (overrideParsed) {
+    if (allowlist.has(overrideParsed.origin)) {
+      return overrideParsed.base;
+    }
+    logger.warn("transbank_front_url_rejected", {
+      origin: overrideParsed.origin,
+      override: overrideParsed.base,
+    });
+  }
+
+  const envUrl = normalizarTexto(process.env.ECOMMERCE_FRONT_URL || process.env.FRONT_URL);
+  const envParsed = normalizarBaseUrl(envUrl);
+  if (envParsed) return envParsed.base;
 
   if (process.env.NODE_ENV === "production") {
     logger.error("transbank_front_url_missing", {
-      requiredEnv: "ECOMMERCE_FRONT_URL"
+      requiredEnv: "ECOMMERCE_FRONT_URL",
     });
-    throw new Error("ECOMMERCE_FRONT_URL no está definida en producción");
+    throw new Error("ECOMMERCE_FRONT_URL no esta definida en produccion");
   }
 
   logger.warn("transbank_front_url_fallback_dev", {
-    fallback: "http://localhost:5173"
+    fallback: "http://localhost:5173",
   });
 
   return "http://localhost:5173";
 };
 
 
-const construirUrlResultadoFront = (payload: {
-  pagoId?: string;
-  pedidoId?: string;
-  estado?: string;
-  status: "success" | "failed";
-  tbkStatus?: string;
-}) => {
-  const base = obtenerFrontUrlBase();
+const construirUrlResultadoFront = (
+  payload: {
+    pagoId?: string;
+    pedidoId?: string;
+    estado?: string;
+    status: "success" | "failed";
+    tbkStatus?: string;
+  },
+  frontOverride?: string
+) => {
+  const base = obtenerFrontUrlBase(frontOverride);
   const url = new URL("/pago/transbank", base);
 
   if (payload.pagoId) {
@@ -184,14 +248,20 @@ const enviarFormularioTransbank = (res: Response, url: string, token: string) =>
 };
 
 // POST /api/ecommerce/payments/transbank
-// Input: { pedidoId, returnUrl? }. Output: redireccion a Webpay (HTML) o JSON si se solicita.
+// Input: { pedidoId, returnUrl?, frontUrl? }. Output: redireccion a Webpay (HTML) o JSON si se solicita.
 export const crearTransbankPago = manejarAsync(async (req: Request, res: Response) => {
   const payload = transbankCrearSchema.parse(req.body);
+  const frontUrl = normalizarTexto(payload.frontUrl) || normalizarTexto(extraerFrontUrlSolicitud(req));
   logger.info("transbank_create_inicio", {
     pedidoId: payload.pedidoId,
     returnUrl: payload.returnUrl ?? null,
+    frontUrl: frontUrl || null,
   });
-  const resultado = await crearTransbankPagoServicio(payload);
+  const resultado = await crearTransbankPagoServicio({
+    pedidoId: payload.pedidoId,
+    returnUrl: payload.returnUrl,
+    frontUrl,
+  });
   const aceptaHtml = (req.headers.accept || "").includes("text/html");
 
   logger.info("transbank_create_respuesta", {
@@ -221,7 +291,12 @@ export const crearTransbankPago = manejarAsync(async (req: Request, res: Respons
 // Input: { token } o token_ws. Output: estado y resumen Transbank (sin token).
 export const confirmarTransbankPago = manejarAsync(async (req: Request, res: Response) => {
   const token = extraerToken(req);
-  logger.info("transbank_commit_request", { metodo: req.method, token: enmascararToken(token) });
+  const requestId = typeof req.headers["x-request-id"] === "string" ? req.headers["x-request-id"] : undefined;
+  logger.info("transbank_commit_request", {
+    metodo: req.method,
+    token: enmascararToken(token),
+    requestId,
+  });
   const resultado = await confirmarTransbankPagoServicio(token);
   const transbank = mapearRespuestaTransbank(resultado.resultado);
 
@@ -231,6 +306,7 @@ export const confirmarTransbankPago = manejarAsync(async (req: Request, res: Res
     estado: resultado.estado,
     status: transbank?.status,
     responseCode: transbank?.responseCode,
+    requestId,
   });
 
   res.json({
@@ -270,12 +346,14 @@ export const recibirRetornoTransbank = manejarAsync(async (req: Request, res: Re
   const token = extraerTokenRaw(req);
   const tokenWs = obtenerTokenWs(req);
   const tbkParams = extraerParametrosTbk(req);
+  const requestId = typeof req.headers["x-request-id"] === "string" ? req.headers["x-request-id"] : undefined;
 
   logger.info("transbank_return_recepcion", {
     metodo: req.method,
     tokenWsPresente: Boolean(tokenWs && String(tokenWs).trim().length > 0),
     token: enmascararToken(token),
     tbkParams,
+    requestId,
   });
 
   if (!token || token.trim().length === 0) {
@@ -287,6 +365,7 @@ export const recibirRetornoTransbank = manejarAsync(async (req: Request, res: Re
     const destino = `${redirectUrl}&reason=missing_token`;
     logger.info("transbank_return_redirect", {
       destino,
+      requestId,
       params: { estado: "ERROR", status: "failed", reason: "missing_token" },
     });
     res.redirect(302, destino);
@@ -297,16 +376,21 @@ export const recibirRetornoTransbank = manejarAsync(async (req: Request, res: Re
     const resultado = await confirmarTransbankPagoServicio(token);
     const transbank = mapearRespuestaTransbank(resultado.resultado);
     const status = resultado.estado === "CONFIRMADO" ? "success" : "failed";
-    const redirectUrl = construirUrlResultadoFront({
-      pagoId: resultado.pago.id,
-      pedidoId: resultado.pago.pedidoId,
-      estado: resultado.estado,
-      status,
-      tbkStatus: transbank?.status,
-    });
+    const frontOverride = extraerFrontUrlGateway(resultado.pago.gatewayPayloadJson);
+    const redirectUrl = construirUrlResultadoFront(
+      {
+        pagoId: resultado.pago.id,
+        pedidoId: resultado.pago.pedidoId,
+        estado: resultado.estado,
+        status,
+        tbkStatus: transbank?.status,
+      },
+      frontOverride
+    );
 
     logger.info("transbank_return_redirect", {
       destino: redirectUrl,
+      requestId,
       params: {
         pagoId: resultado.pago.id,
         pedidoId: resultado.pago.pedidoId,
@@ -314,6 +398,7 @@ export const recibirRetornoTransbank = manejarAsync(async (req: Request, res: Re
         status,
         tbkStatus: transbank?.status,
       },
+      frontUrl: frontOverride || null,
     });
 
     res.redirect(302, redirectUrl);
@@ -324,14 +409,19 @@ export const recibirRetornoTransbank = manejarAsync(async (req: Request, res: Re
       error: resumirError(error),
     });
     const pago = await buscarPagoPorReferencia(token).catch(() => null);
-    const redirectUrl = construirUrlResultadoFront({
-      pagoId: pago?.id,
-      pedidoId: pago?.pedidoId,
-      estado: "ERROR",
-      status: "failed",
-    });
+    const frontOverride = extraerFrontUrlGateway(pago?.gatewayPayloadJson);
+    const redirectUrl = construirUrlResultadoFront(
+      {
+        pagoId: pago?.id,
+        pedidoId: pago?.pedidoId,
+        estado: "ERROR",
+        status: "failed",
+      },
+      frontOverride
+    );
     logger.info("transbank_return_redirect", {
       destino: redirectUrl,
+      requestId,
       params: {
         pagoId: pago?.id,
         pedidoId: pago?.pedidoId,
@@ -339,6 +429,7 @@ export const recibirRetornoTransbank = manejarAsync(async (req: Request, res: Re
         status: "failed",
         reason: "exception",
       },
+      frontUrl: frontOverride || null,
     });
     res.redirect(302, redirectUrl);
   }
