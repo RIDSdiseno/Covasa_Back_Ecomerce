@@ -131,6 +131,7 @@ model Producto {
   descripcionCorta        String?
   descripcionTecnica      String?
   categoriaId             String?
+  minQuantity             Int                       @default(0)  // Cantidad mínima de compra
 
   Inventario              Inventario?
   PrecioProveedor         PrecioProveedor[]

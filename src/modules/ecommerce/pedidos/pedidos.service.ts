@@ -35,6 +35,10 @@ import {
   obtenerCarritoPorId,
   obtenerPedidoPorId,
 } from "./pedidos.repo";
+import {
+  validateCartMinQuantities,
+  throwMultipleMinQtyErrors,
+} from "../common/minQuantity.validator";
 
 type ItemSolicitud = { productoId: string; varianteId?: string; cantidad: number };
 
@@ -265,6 +269,12 @@ export const crearPedidoServicio = async (payload: {
 
   await validarStockDisponible(itemsAgrupados);
 
+  // Validar cantidades mínimas de compra
+  const minQtyValidation = await validateCartMinQuantities(itemsAgrupados);
+  if (!minQtyValidation.valid) {
+    throwMultipleMinQtyErrors(minQtyValidation.errors);
+  }
+
   let subtotalNeto = 0;
   let ivaTotal = 0;
   const itemsCrear = itemsAgrupados.map((item) => {
@@ -398,6 +408,12 @@ export const crearPedidoDesdeCarritoServicio = async (
   }));
 
   await validarStockDisponible(itemsSolicitud);
+
+  // Validar cantidades mínimas de compra
+  const minQtyValidation = await validateCartMinQuantities(itemsSolicitud);
+  if (!minQtyValidation.valid) {
+    throwMultipleMinQtyErrors(minQtyValidation.errors);
+  }
 
   const productos = await buscarProductosPorIds(itemsSolicitud.map((item) => item.productoId));
   const productosPorId = new Map(productos.map((producto) => [producto.id, producto]));

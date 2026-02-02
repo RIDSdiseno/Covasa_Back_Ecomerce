@@ -29,6 +29,7 @@ type ProductoBase = {
   unidadVenta?: string | null;
   descripcionCorta?: string | null;
   descripcionTecnica?: string | null;
+  minQuantity?: number;  // Cantidad mínima de compra
   Inventario: { stock: number } | null;
   ProductoImagen: { url: string; orden: number }[];
   ProductoVariante?: VarianteBase[];
@@ -97,6 +98,7 @@ const mapearProducto = (producto: ProductoBase) => {
     descripcionTecnica: producto.descripcionTecnica,
     precioMinimo,
     precioMaximo,
+    minQuantity: producto.minQuantity ?? 0,  // Cantidad mínima de compra
     variantes: tieneVariantes
       ? variantes.map((v) => ({
           id: v.id,

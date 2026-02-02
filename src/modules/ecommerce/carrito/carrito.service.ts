@@ -1,6 +1,7 @@
 import { ErrorApi } from "../../../lib/errores";
 import { prisma } from "../../../lib/prisma";
 import { calcularTotales, obtenerIvaPct } from "../common/ecommerce.utils";
+import { validateMinQuantity, throwMinQtyError } from "../common/minQuantity.validator";
 import {
   actualizarCarritoItem,
   actualizarCarritoTimestamp,
@@ -83,6 +84,12 @@ export const agregarItemCarritoServicio = async (
     const existente = await buscarItemPorCarritoProducto(carritoId, payload.productoId, tx);
     const cantidadFinal = (existente?.cantidad ?? 0) + payload.cantidad;
 
+    // Validar cantidad mínima de compra
+    const minQtyResult = await validateMinQuantity(payload.productoId, cantidadFinal);
+    if (!minQtyResult.valid) {
+      throwMinQtyError(minQtyResult);
+    }
+
     const precioNeto =
       producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral;
     const subtotal = precioNeto * cantidadFinal;
@@ -121,6 +128,12 @@ export const actualizarCantidadItemCarritoServicio = async (
     const item = await buscarItemPorId(carritoId, itemId, tx);
     if (!item) {
       throw new ErrorApi("Item no encontrado", 404, { id: itemId });
+    }
+
+    // Validar cantidad mínima de compra
+    const minQtyResult = await validateMinQuantity(item.productoId, payload.cantidad);
+    if (!minQtyResult.valid) {
+      throwMinQtyError(minQtyResult);
     }
 
     const producto = await buscarProductoPorId(item.productoId, tx);
