@@ -1,12 +1,63 @@
 import { Request, Response } from "express";
 import { manejarAsync } from "../../../lib/manejarAsync";
-import { cotizacionCrearSchema, cotizacionIdSchema, cotizacionQuerySchema, quoteCrearSchema } from "./cotizaciones.schema";
+import { ErrorApi } from "../../../lib/errores";
+import { normalizarTexto } from "../common/ecommerce.utils";
+import {
+  cotizacionCrearSchema,
+  cotizacionEliminarSchema,
+  cotizacionIdSchema,
+  cotizacionQuerySchema,
+  quoteCrearSchema,
+} from "./cotizaciones.schema";
 import {
   convertirCotizacionACarritoServicio,
   crearCotizacionServicio,
+  eliminarCotizacionServicio,
   listarCotizacionesServicio,
   obtenerCotizacionServicio,
 } from "./cotizaciones.service";
+
+const obtenerUsuarioId = (req: Request, res: Response) => {
+  const authUserId = res.locals.auth?.sub as string | undefined;
+  if (authUserId) {
+    return authUserId;
+  }
+
+  const headerValue = req.headers["x-usuario-id"] ?? req.headers["x-user-id"];
+  const headerId = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  const queryValue = req.query.usuarioId ?? req.query.userId;
+  const queryId = Array.isArray(queryValue) ? queryValue[0] : queryValue;
+
+  const usuarioId = normalizarTexto(typeof headerId === "string" ? headerId : "") ||
+    normalizarTexto(typeof queryId === "string" ? queryId : "");
+
+  if (!usuarioId) {
+    throw new ErrorApi("usuarioId requerido", 401);
+  }
+
+  return usuarioId;
+};
+
+const obtenerTenantId = (req: Request, res: Response) => {
+  const authTenant = (res.locals.auth as { tenantId?: string } | undefined)?.tenantId;
+  if (authTenant) {
+    const tenantNormalizado = normalizarTexto(authTenant);
+    if (tenantNormalizado) {
+      return tenantNormalizado;
+    }
+  }
+
+  const headerValue = req.headers["x-tenant-id"] ?? req.headers["x-tenant"];
+  const headerId = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  const queryValue = req.query.tenantId;
+  const queryId = Array.isArray(queryValue) ? queryValue[0] : queryValue;
+
+  return (
+    normalizarTexto(typeof headerId === "string" ? headerId : "") ||
+    normalizarTexto(typeof queryId === "string" ? queryId : "") ||
+    null
+  );
+};
 
 // GET /api/ecommerce/cotizaciones
 // Output: listado paginado de cotizaciones ecommerce.
@@ -106,5 +157,35 @@ export const convertirCotizacionACarrito = manejarAsync(async (req: Request, res
     ok: true,
     data: { carritoId: resultado.carritoId },
     message: "Cotizacion convertida a carrito",
+  });
+});
+
+// DELETE /api/ecommerce/cotizaciones/:id
+// Input: { motivo? }. Output: { action, cotizacionId, estado }.
+export const eliminarCotizacion = manejarAsync(async (req: Request, res: Response) => {
+  const { id } = cotizacionIdSchema.parse(req.params);
+  const payload = cotizacionEliminarSchema.parse(req.body ?? {});
+  const usuarioId = obtenerUsuarioId(req, res);
+  const tenantId = obtenerTenantId(req, res);
+
+  const resultado = await eliminarCotizacionServicio({
+    id,
+    usuarioId,
+    motivo: payload.motivo ?? undefined,
+  });
+
+  console.info("[EcommerceCotizacion] eliminar", {
+    cotizacionId: id,
+    usuarioId,
+    tenantId,
+    resultado: resultado.action,
+    pedidoId: resultado.pedidoId,
+    pagoCount: resultado.pagoCount,
+  });
+
+  res.json({
+    ok: true,
+    data: resultado,
+    message: resultado.action === "deleted" ? "Cotizacion eliminada" : "Cotizacion cancelada",
   });
 });

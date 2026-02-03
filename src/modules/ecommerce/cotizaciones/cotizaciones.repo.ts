@@ -73,3 +73,41 @@ export const obtenerCotizacionConItems = (id: string, tx?: DbClient) =>
     where: { id },
     include: { items: true },
   });
+
+export const obtenerCotizacionParaEliminar = (
+  id: string,
+  ecommerceClienteId: string,
+  tx?: DbClient
+) =>
+  db(tx).ecommerceCotizacion.findFirst({
+    where: { id, ecommerceClienteId },
+    select: {
+      id: true,
+      codigo: true,
+      estado: true,
+      ecommerceClienteId: true,
+      crmCotizacionId: true,
+      metadata: true,
+      crmCotizacion: { select: { estado: true } },
+    },
+  });
+
+export const actualizarCotizacionCancelacion = (
+  id: string,
+  data: { estado: EcommerceEstadoCotizacion; metadata: Prisma.InputJsonValue },
+  tx?: DbClient
+) =>
+  db(tx).ecommerceCotizacion.update({
+    where: { id },
+    data,
+  });
+
+export const eliminarCotizacionItems = (cotizacionId: string, tx?: DbClient) =>
+  db(tx).ecommerceCotizacionItem.deleteMany({
+    where: { cotizacionId },
+  });
+
+export const eliminarCotizacion = (cotizacionId: string, tx?: DbClient) =>
+  db(tx).ecommerceCotizacion.delete({
+    where: { id: cotizacionId },
+  });

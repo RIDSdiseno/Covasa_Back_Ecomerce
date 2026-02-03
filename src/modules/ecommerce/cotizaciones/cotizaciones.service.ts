@@ -16,8 +16,12 @@ import {
   buscarClientePorId,
   buscarProductosPorIds,
   crearCotizacion,
+  eliminarCotizacion,
+  eliminarCotizacionItems,
+  obtenerCotizacionParaEliminar,
   obtenerCotizacionConItems,
   obtenerCotizacionPorId,
+  actualizarCotizacionCancelacion,
 } from "./cotizaciones.repo";
 import {
   actualizarCarritoTimestamp,
@@ -26,6 +30,7 @@ import {
   upsertCarritoItem,
 } from "../carrito/carrito.repo";
 import { registrarNotificacion } from "../notificaciones/notificaciones.service";
+import { buscarClientePorUsuarioId, buscarUsuarioPorId } from "../usuarios/usuarios.repo";
 
 type ItemSolicitud = { productoId: string; cantidad: number; observacion?: string | null };
 
@@ -54,6 +59,41 @@ type CotizacionBasePayload = {
     ubicacion?: string;
   };
   items: ItemSolicitud[];
+};
+
+type EliminarCotizacionResultado = {
+  action: "deleted" | "cancelled";
+  cotizacionId: string;
+  estado: EcommerceEstadoCotizacion;
+  pedidoId: string | null;
+  pagoCount: number;
+};
+
+const resolverClienteUsuario = async (usuarioId: string) => {
+  const usuario = await buscarUsuarioPorId(usuarioId);
+  if (!usuario) {
+    throw new ErrorApi("Usuario ecommerce no encontrado", 404, { id: usuarioId });
+  }
+
+  const cliente = await buscarClientePorUsuarioId(usuarioId);
+  if (!cliente) {
+    throw new ErrorApi("Cliente ecommerce no encontrado", 404, { usuarioId });
+  }
+
+  return { usuarioId: usuario.id, ecommerceClienteId: cliente.id };
+};
+
+const esJsonObject = (valor: Prisma.InputJsonValue | null | undefined): valor is Prisma.InputJsonObject =>
+  Boolean(valor && typeof valor === "object" && !Array.isArray(valor));
+
+const fusionarMetadata = (
+  actual: Prisma.InputJsonValue | null | undefined,
+  extra: Record<string, Prisma.InputJsonValue>
+): Prisma.InputJsonValue => {
+  if (esJsonObject(actual)) {
+    return { ...(actual as Prisma.InputJsonObject), ...extra };
+  }
+  return extra as Prisma.InputJsonObject;
 };
 
 // Crea una cotizacion Ecommerce con snapshots calculados y notificacion.
@@ -365,6 +405,74 @@ export const convertirCotizacionACarritoServicio = async (id: string) => {
     });
 
     return { carritoId, cotizacionId: cotizacion.id };
+  });
+
+  return resultado;
+};
+
+export const eliminarCotizacionServicio = async (payload: {
+  id: string;
+  usuarioId: string;
+  motivo?: string;
+}): Promise<EliminarCotizacionResultado> => {
+  const { ecommerceClienteId } = await resolverClienteUsuario(payload.usuarioId);
+  const motivo = normalizarTexto(payload.motivo ?? "") || "Solicitud de usuario";
+
+  const resultado = await prisma.$transaction(async (tx) => {
+    const cotizacion = await obtenerCotizacionParaEliminar(payload.id, ecommerceClienteId, tx);
+    if (!cotizacion) {
+      throw new ErrorApi("Cotizacion no encontrada", 404, { id: payload.id });
+    }
+
+    const pedido = cotizacion.crmCotizacionId
+      ? await tx.ecommercePedido.findFirst({
+          where: { crmCotizacionId: cotizacion.crmCotizacionId },
+          select: { id: true, _count: { select: { pagos: true } } },
+        })
+      : null;
+
+    const tienePedido = Boolean(pedido);
+    const tienePago = (pedido?._count.pagos ?? 0) > 0;
+    const estadoFinal = cotizacion.estado === EcommerceEstadoCotizacion.CERRADA;
+    const estadoCrmGanado = cotizacion.crmCotizacion?.estado === CrmEstadoCotizacion.GANADA;
+
+    if (tienePedido || tienePago || estadoFinal || estadoCrmGanado) {
+      const metadata = fusionarMetadata(cotizacion.metadata ?? null, {
+        cancelacion: {
+          fecha: new Date().toISOString(),
+          motivo,
+          usuarioId: payload.usuarioId,
+        },
+      });
+
+      await actualizarCotizacionCancelacion(
+        cotizacion.id,
+        {
+          estado: EcommerceEstadoCotizacion.CERRADA,
+          metadata,
+        },
+        tx
+      );
+
+      return {
+        action: "cancelled",
+        cotizacionId: cotizacion.id,
+        estado: EcommerceEstadoCotizacion.CERRADA,
+        pedidoId: pedido?.id ?? null,
+        pagoCount: pedido?._count.pagos ?? 0,
+      } satisfies EliminarCotizacionResultado;
+    }
+
+    await eliminarCotizacionItems(cotizacion.id, tx);
+    await eliminarCotizacion(cotizacion.id, tx);
+
+    return {
+      action: "deleted",
+      cotizacionId: cotizacion.id,
+      estado: cotizacion.estado,
+      pedidoId: null,
+      pagoCount: 0,
+    } satisfies EliminarCotizacionResultado;
   });
 
   return resultado;

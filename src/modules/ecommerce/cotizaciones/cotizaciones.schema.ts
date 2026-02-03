@@ -77,3 +77,7 @@ export const cotizacionQuerySchema = z.object({
   to: z.string().trim().min(1).optional(),
   page: z.coerce.number().int().positive().optional(),
 });
+
+export const cotizacionEliminarSchema = z.object({
+  motivo: z.string().trim().max(300).optional(),
+});
