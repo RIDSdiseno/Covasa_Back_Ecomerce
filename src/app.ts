@@ -9,7 +9,7 @@ import fs from "fs";
 
 const app = express();
 
-const envAllowed = (process.env.FRONTEND_ORIGIN || process.env.ALLOWED_ORIGINS || "")
+const envAllowed = (process.env.FRONTEND_ORIGINS || process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
