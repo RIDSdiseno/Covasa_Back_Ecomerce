@@ -4,18 +4,26 @@ import routes from "./routes";
 import { notFound } from "./middleware/notFound";
 import { errorHandler } from "./middleware/errorHandler";
 import { requestLogger } from "./middleware/requestLogger";
+import { logger } from "./lib/logger";
 import path from "path";
 import fs from "fs";
 
 const app = express();
 
-const envAllowed = (process.env.FRONTEND_ORIGINS || process.env.ALLOWED_ORIGINS || "")
+const envAllowed = (
+  process.env.FRONTEND_ORIGINS ||
+  process.env.FRONTEND_ORIGIN ||
+  process.env.ALLOWED_ORIGINS ||
+  ""
+)
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
 const allowAll = process.env.CORS_ALLOW_ALL === "true";
 const allowedOrigins = [...envAllowed];
+
+console.log("[CORS] allowedOrigins =", allowedOrigins, "allowAll=", allowAll);
 
 type RouteLayer = {
   route?: { path: string; methods?: Record<string, boolean> };
@@ -84,32 +92,31 @@ const listarRutas = (appRef: typeof app) => {
 
 app.set("trust proxy", 1);
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || allowAll) {
-        return callback(null, true);
-      }
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
+    if (!origin || allowAll) {
+      return callback(null, true);
+    }
 
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, origin);
-      }
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
 
-      return callback(null, false);
-    },
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-request-id", "x-integration-token"],
-    exposedHeaders: ["x-request-id"],
-    credentials: true,
-    optionsSuccessStatus: 204,
-  })
-);
+    logger.warn("cors_origin_blocked", { origin, allowedOrigins });
+    return callback(null, false);
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "x-request-id", "x-integration-token"],
+  exposedHeaders: ["x-request-id"],
+  credentials: true,
+  optionsSuccessStatus: 204,
+};
+
+app.use(cors(corsOptions));
 
 app.use(requestLogger);
 
-app.options("*", (_req, res) => {
-  res.sendStatus(204);
-});
+app.options("*", cors(corsOptions));
 
 app.get("/__ping", (_req, res) => {
   res.status(200).send("COVASA-BACK-OK");

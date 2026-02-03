@@ -59,12 +59,14 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
   const ip = resolverIp(req);
   const method = req.method;
   const path = req.path;
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
 
   requestContext.run({ requestId }, () => {
     logger.info("request_start", {
       method,
       path,
       ip,
+      origin,
     });
 
     res.on("finish", () => {
@@ -82,6 +84,7 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
         durationMs: Math.round(durationMs),
         ip,
         userId,
+        origin,
       });
     });
 

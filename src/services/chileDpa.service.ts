@@ -109,6 +109,13 @@ export const getRegiones = async () => {
   );
 };
 
+export const getComunas = async () => {
+  const baseUrl = getBaseUrl();
+  return fetchWithCache("comunas", async () =>
+    normalizeList(await fetchJson<unknown>(`${baseUrl}/comunas`))
+  );
+};
+
 export const getProvinciasByRegion = async (regionCode: string) => {
   const baseUrl = getBaseUrl();
   const key = `regiones:${regionCode}:provincias`;
