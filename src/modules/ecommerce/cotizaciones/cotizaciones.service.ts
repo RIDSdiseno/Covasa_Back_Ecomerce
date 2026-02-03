@@ -7,6 +7,7 @@ const PAGE_SIZE = 20;
 import {
   construirObservaciones,
   formatearCodigo,
+  normalizarTelefonoChile,
   normalizarTexto,
   obtenerIvaPct,
 } from "../common/ecommerce.utils";
@@ -43,6 +44,8 @@ type CotizacionBasePayload = {
     empresa?: string | null;
     rut?: string | null;
     direccion?: string | null;
+    region?: string | null;
+    comuna?: string | null;
     mensaje?: string | null;
   };
   observaciones?: string;
@@ -57,6 +60,8 @@ type CotizacionBasePayload = {
     comunaRegion?: string;
     detalleAdicional?: string;
     ubicacion?: string;
+    region?: string;
+    comuna?: string;
   };
   items: ItemSolicitud[];
 };
@@ -106,10 +111,16 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
   const nombreContacto = normalizarTexto(payload.contacto.nombre);
   const emailNormalizado = normalizarTexto(payload.contacto.email ?? undefined);
   const email = emailNormalizado ? emailNormalizado.toLowerCase() : undefined;
-  const telefono = normalizarTexto(payload.contacto.telefono ?? undefined) || undefined;
+  const telefonoNormalizado = normalizarTelefonoChile(payload.contacto.telefono ?? undefined);
+  if (payload.contacto.telefono && !telefonoNormalizado) {
+    throw new ErrorApi("Telefono invalido", 400, { telefono: payload.contacto.telefono });
+  }
+  const telefono = telefonoNormalizado || undefined;
   const empresa = normalizarTexto(payload.contacto.empresa ?? undefined) || undefined;
   const rut = normalizarTexto(payload.contacto.rut ?? undefined) || undefined;
   const direccion = normalizarTexto(payload.contacto.direccion ?? undefined);
+  const region = normalizarTexto(payload.contacto.region ?? undefined);
+  const comuna = normalizarTexto(payload.contacto.comuna ?? undefined);
   const mensaje = normalizarTexto(payload.contacto.mensaje ?? undefined);
   const origen = normalizarTexto(payload.origen ?? undefined) || "ECOMMERCE";
   const metadataUtm = payload.metadata?.utm ?? undefined;
@@ -177,6 +188,8 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
     direccion,
     mensaje,
     tipoObra: payload.extra?.tipoObra,
+    region: payload.extra?.region ?? region,
+    comuna: payload.extra?.comuna ?? comuna,
     comunaRegion: payload.extra?.comunaRegion,
     detalleAdicional: payload.extra?.detalleAdicional,
     ubicacion: payload.extra?.ubicacion,

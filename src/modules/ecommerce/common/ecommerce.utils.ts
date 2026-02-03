@@ -41,6 +41,24 @@ export const agruparItems = (items: ItemCantidad[]) => {
 
 export const normalizarTexto = (valor?: string) => (valor ?? "").trim();
 
+export const normalizarTelefonoChile = (valor?: string | null) => {
+  const digits = (valor ?? "").replace(/\D/g, "");
+  if (!digits) {
+    return undefined;
+  }
+
+  let local = digits;
+  if (local.startsWith("56")) {
+    local = local.slice(2);
+  }
+
+  if (local.length !== 9 || !local.startsWith("9")) {
+    return undefined;
+  }
+
+  return `+56${local}`;
+};
+
 export const construirNombreCompleto = (nombres?: string | null, apellidos?: string | null) => {
   const partes = [normalizarTexto(nombres ?? undefined), normalizarTexto(apellidos ?? undefined)].filter(
     (valor) => valor.length > 0
@@ -78,6 +96,8 @@ export const construirObservaciones = (datos: {
   direccion?: string;
   mensaje?: string;
   tipoObra?: string;
+  region?: string;
+  comuna?: string;
   comunaRegion?: string;
   detalleAdicional?: string;
   ubicacion?: string;
@@ -86,6 +106,8 @@ export const construirObservaciones = (datos: {
   const direccion = normalizarTexto(datos.direccion);
   const mensaje = normalizarTexto(datos.mensaje);
   const tipoObra = normalizarTexto(datos.tipoObra);
+  const region = normalizarTexto(datos.region);
+  const comuna = normalizarTexto(datos.comuna);
   const comunaRegion = normalizarTexto(datos.comunaRegion);
   const detalleAdicional = normalizarTexto(datos.detalleAdicional);
   const ubicacion = normalizarTexto(datos.ubicacion);
@@ -96,6 +118,8 @@ export const construirObservaciones = (datos: {
   if (direccion) payload.direccion = direccion;
   if (mensaje) payload.mensaje = mensaje;
   if (tipoObra) payload.tipoObra = tipoObra;
+  if (region) payload.region = region;
+  if (comuna) payload.comuna = comuna;
   if (comunaRegion) payload.comunaRegion = comunaRegion;
   if (detalleAdicional) payload.detalleAdicional = detalleAdicional;
   if (ubicacion) payload.ubicacion = ubicacion;

@@ -81,6 +81,8 @@ export const crearCotizacion = manejarAsync(async (req: Request, res: Response) 
       empresa: payload.contacto.empresa ?? undefined,
       rut: payload.contacto.rut ?? undefined,
       direccion: payload.contacto.direccion ?? undefined,
+      region: payload.contacto.region ?? undefined,
+      comuna: payload.contacto.comuna ?? undefined,
       mensaje: payload.contacto.mensaje ?? undefined,
     },
     observaciones: payload.observaciones,
@@ -90,6 +92,8 @@ export const crearCotizacion = manejarAsync(async (req: Request, res: Response) 
     extra: {
       tipoObra: payload.contacto.tipoObra ?? undefined,
       ubicacion: payload.contacto.ubicacion ?? undefined,
+      region: payload.contacto.region ?? undefined,
+      comuna: payload.contacto.comuna ?? undefined,
     },
     items: payload.items,
   });

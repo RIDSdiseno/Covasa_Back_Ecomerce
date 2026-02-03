@@ -166,6 +166,8 @@ export const obtenerCrmCotizacionServicio = async (id: string) => {
       empresa: cotizacion.empresa ?? null,
       rut: cotizacion.rut ?? null,
       direccion: leerTexto(extras.direccion) ?? null,
+      region: leerTexto(extras.region) ?? null,
+      comuna: leerTexto(extras.comuna) ?? null,
       mensaje: leerTexto(extras.mensaje) ?? null,
     },
     extra: {
