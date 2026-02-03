@@ -15,7 +15,8 @@ Backend e-commerce (Node.js + TypeScript + Express + Prisma + PostgreSQL).
 3) Variables de entorno (ejemplo):
    - `PORT=3000`
    - `DATABASE_URL=postgresql://USER:PASS@HOST:PORT/DB?sslmode=require`
-   - `ALLOWED_ORIGINS=http://localhost:5173`
+   - `FRONTEND_ORIGIN=http://localhost:5173`
+   - `EXTERNAL_DPA_BASE_URL=https://apis.digital.gob.cl/dpa` (opcional)
    - `CORS_ALLOW_ALL=true` (opcional)
    - `IVA_PCT=19` (opcional)
    - `COTIZACIONES_VENTANA_MIN=15` (opcional)
@@ -42,6 +43,31 @@ Backend e-commerce (Node.js + TypeScript + Express + Prisma + PostgreSQL).
 - `POST /api/cotizaciones`
 - `POST /api/pagos` (placeholder)
 
+## Proxy API DPA (Chile)
+Endpoints expuestos por el backend para evitar CORS:
+- `GET /api/chile/regiones`
+- `GET /api/chile/regiones/:regionCode/provincias`
+- `GET /api/chile/provincias/:provinciaCode/comunas`
+- `GET /api/chile/regiones/:regionCode/comunas`
+
+Ejemplos de prueba (curl):
+- `curl http://localhost:3001/api/chile/regiones`
+- `curl http://localhost:3001/api/chile/regiones/13/provincias`
+- `curl http://localhost:3001/api/chile/provincias/131/comunas`
+- `curl http://localhost:3001/api/chile/regiones/13/comunas`
+
+Ejemplo desde frontend (fetch):
+```ts
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
+
+export const fetchRegiones = async () => {
+  const res = await fetch(`${API_BASE}/api/chile/regiones`);
+  if (!res.ok) throw new Error("No se pudieron cargar las regiones");
+  const { data } = await res.json();
+  return data;
+};
+```
+
 ## Railway
-- Variables requeridas: `DATABASE_URL`, `PORT`, `ALLOWED_ORIGINS`, `IVA_PCT`.
+- Variables requeridas: `DATABASE_URL`, `PORT`, `FRONTEND_ORIGIN`, `IVA_PCT`.
 - Recomendado: ejecutar `npm run prisma:migrate` en el deploy para crear tablas nuevas.

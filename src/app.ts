@@ -9,23 +9,13 @@ import fs from "fs";
 
 const app = express();
 
-const defaultAllowedOrigins = [
-  "http://localhost:3001",
-  "http://127.0.0.1:3001",
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "https://covasachile.cl",
-  "https://www.covasachile.cl"
-  
-];
-
-const envAllowed = (process.env.ALLOWED_ORIGINS || "")
+const envAllowed = (process.env.FRONTEND_ORIGIN || process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
 const allowAll = process.env.CORS_ALLOW_ALL === "true";
-const allowedOrigins = [...defaultAllowedOrigins, ...envAllowed];
+const allowedOrigins = [...envAllowed];
 
 type RouteLayer = {
   route?: { path: string; methods?: Record<string, boolean> };
