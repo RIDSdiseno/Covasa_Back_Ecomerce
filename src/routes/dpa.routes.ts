@@ -30,6 +30,16 @@ const getErrorMessage = (error: unknown) => {
   }
 };
 
+const getQueryString = (value: unknown) => {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value) && typeof value[0] === "string") {
+    return value[0];
+  }
+  return "";
+};
+
 const sendDpaError = (res: Response, error: unknown) => {
   if (error instanceof ErrorApi && error.status < 500) {
     return res.status(error.status).json({ ok: false, message: error.message });
@@ -48,9 +58,10 @@ router.get("/regiones", async (_req, res) => {
   }
 });
 
-router.get("/comunas", async (_req, res) => {
+router.get("/comunas", async (req, res) => {
   try {
-    const data = await getComunas();
+    const region = getQueryString(req.query.region);
+    const data = await getComunas(region);
     return res.json({ ok: true, data });
   } catch (error) {
     logger.warn(`[DPA] Route /comunas FAIL: ${getErrorMessage(error)}`);
@@ -58,10 +69,11 @@ router.get("/comunas", async (_req, res) => {
   }
 });
 
+// Mantener endpoint legacy para compatibilidad.
 router.get("/regiones/:codigo/comunas", async (req, res) => {
   try {
-    const codigo = requireParam(req.params.codigo, "Region requerida");
-    const data = await getComunasByRegion(codigo);
+    const region = requireParam(req.params.codigo, "Region requerida");
+    const data = await getComunasByRegion(region);
     return res.json({ ok: true, data });
   } catch (error) {
     logger.warn(`[DPA] Route /regiones/:codigo/comunas FAIL: ${getErrorMessage(error)}`);

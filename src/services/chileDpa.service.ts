@@ -1,28 +1,39 @@
 import { ErrorApi } from "../lib/errores";
 import { logger } from "../lib/logger";
 
-const DEFAULT_DPA_BASE_URL = "https://apis.digital.gob.cl/dpa";
-const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 horas
+const DATASET_URL =
+  "https://gist.githubusercontent.com/juanbrujo/0fd2f4d126b3ce5a95a7dd1f28b3d8dd/raw/b8575eb82dce974fd2647f46819a7568278396bd/comunas-regiones.json";
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
 const REQUEST_TIMEOUT_MS = 8_000;
 export const DPA_UNAVAILABLE_MESSAGE = "Servicio de regiones/comunas no disponible";
 
-type CacheEntry<T> = {
+type DatasetRegion = {
+  region: string;
+  comunas: string[];
+};
+
+type DatasetCacheData = {
+  regiones: DatasetRegion[];
+  comunasByRegion: Map<string, string[]>;
+};
+
+type DatasetCacheState = {
   expiresAt: number;
-  data?: T;
-  promise?: Promise<T>;
+  data?: DatasetCacheData;
+  promise?: Promise<DatasetCacheData>;
 };
 
-const cache = new Map<string, CacheEntry<unknown>>();
-
-const getBaseUrl = () => (process.env.EXTERNAL_DPA_BASE_URL || DEFAULT_DPA_BASE_URL).replace(/\/$/, "");
-
-const normalizeList = (data: unknown) => {
-  if (Array.isArray(data)) return data;
-  if (data && typeof data === "object" && Array.isArray((data as { data?: unknown }).data)) {
-    return (data as { data: unknown[] }).data;
-  }
-  return [];
+const cache: DatasetCacheState = {
+  expiresAt: 0,
 };
+
+const normalizeKey = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) {
@@ -36,196 +47,183 @@ const getErrorMessage = (error: unknown) => {
   }
 };
 
-const dpaUnavailableError = (url: string, reason: string, extra?: Record<string, unknown>) =>
-  new ErrorApi(DPA_UNAVAILABLE_MESSAGE, 503, { url, reason, ...(extra ?? {}) }, "DPA_UNAVAILABLE");
+const dpaUnavailableError = (reason: string, extra?: Record<string, unknown>) =>
+  new ErrorApi(DPA_UNAVAILABLE_MESSAGE, 503, { reason, ...(extra ?? {}) }, "DPA_UNAVAILABLE");
 
-const fetchJson = async <T>(url: string): Promise<T> => {
+const uniqueStrings = (values: string[]) => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  values.forEach((value) => {
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      return;
+    }
+    seen.add(trimmed);
+    result.push(trimmed);
+  });
+
+  return result;
+};
+
+const normalizeDataset = (payload: unknown): DatasetCacheData => {
+  if (!payload || typeof payload !== "object") {
+    throw dpaUnavailableError("invalid_payload");
+  }
+
+  const regionesRaw = (payload as { regiones?: unknown }).regiones;
+  if (!Array.isArray(regionesRaw)) {
+    throw dpaUnavailableError("invalid_regiones_array");
+  }
+
+  const regiones: DatasetRegion[] = [];
+
+  regionesRaw.forEach((entry) => {
+    if (!entry || typeof entry !== "object") {
+      return;
+    }
+
+    const region = String((entry as { region?: unknown }).region ?? "").trim();
+    const comunasRaw = (entry as { comunas?: unknown }).comunas;
+    if (!region || !Array.isArray(comunasRaw)) {
+      return;
+    }
+
+    const comunas = uniqueStrings(
+      comunasRaw.map((value) => String(value ?? "")).filter((value) => value.trim().length > 0)
+    );
+
+    regiones.push({ region, comunas });
+  });
+
+  const comunasByRegion = new Map<string, string[]>();
+  regiones.forEach((entry) => {
+    comunasByRegion.set(normalizeKey(entry.region), entry.comunas);
+  });
+
+  return { regiones, comunasByRegion };
+};
+
+const fetchDatasetFromUpstream = async (): Promise<DatasetCacheData> => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const startedAt = Date.now();
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(DATASET_URL, {
       headers: { Accept: "application/json" },
       signal: controller.signal,
     });
 
+    if (!response.ok) {
+      throw dpaUnavailableError("upstream_status", { status: response.status, url: DATASET_URL });
+    }
+
+    const payload = (await response.json()) as unknown;
+    const data = normalizeDataset(payload);
     const durationMs = Date.now() - startedAt;
 
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      logger.warn("[DPA] External fetch FAIL", {
-        url,
-        status: response.status,
-        durationMs,
-        bodyPreview: body.slice(0, 200),
-      });
-      throw dpaUnavailableError(url, "upstream_status", { status: response.status });
-    }
+    logger.info("[DPA] Fetch dataset OK", {
+      durationMs,
+      regionesCount: data.regiones.length,
+      url: DATASET_URL,
+    });
 
-    const raw = await response.text();
-    try {
-      const parsed = JSON.parse(raw) as T;
-      logger.debug("[DPA] External fetch OK", { url, durationMs });
-      return parsed;
-    } catch (error) {
-      logger.warn("[DPA] External parse FAIL", {
-        url,
-        durationMs,
-        bodyPreview: raw.slice(0, 200),
-        error: getErrorMessage(error),
-      });
-      throw dpaUnavailableError(url, "invalid_json");
-    }
+    return data;
   } catch (error) {
+    const durationMs = Date.now() - startedAt;
+
     if ((error as { name?: string }).name === "AbortError") {
-      logger.warn("[DPA] External fetch TIMEOUT", { url, timeoutMs: REQUEST_TIMEOUT_MS });
-      throw dpaUnavailableError(url, "timeout", { timeoutMs: REQUEST_TIMEOUT_MS });
+      const timeoutError = dpaUnavailableError("timeout", {
+        timeoutMs: REQUEST_TIMEOUT_MS,
+        url: DATASET_URL,
+      });
+      logger.warn(`[DPA] Fetch dataset FAIL: ${timeoutError.message}`, {
+        reason: "timeout",
+        durationMs,
+        timeoutMs: REQUEST_TIMEOUT_MS,
+      });
+      throw timeoutError;
     }
 
-    if (error instanceof ErrorApi) {
-      throw error;
-    }
+    const wrapped =
+      error instanceof ErrorApi ? error : dpaUnavailableError("request_failed", { error: getErrorMessage(error) });
 
-    logger.warn("[DPA] External fetch FAIL", { url, error: getErrorMessage(error) });
-    throw dpaUnavailableError(url, "network_error", { error: getErrorMessage(error) });
+    logger.warn(`[DPA] Fetch dataset FAIL: ${wrapped.message}`, {
+      reason: wrapped.details,
+      durationMs,
+      error: getErrorMessage(error),
+    });
+
+    throw wrapped;
   } finally {
     clearTimeout(timeout);
   }
 };
 
-const fetchWithCache = async <T>(key: string, fetcher: () => Promise<T>): Promise<T> => {
+const getDataset = async (): Promise<DatasetCacheData> => {
   const now = Date.now();
-  const existing = cache.get(key) as CacheEntry<T> | undefined;
 
-  if (existing?.data && existing.expiresAt > now) {
-    return existing.data;
+  if (cache.data && cache.expiresAt > now) {
+    return cache.data;
   }
 
-  if (existing?.promise) {
-    return existing.promise;
+  if (cache.promise) {
+    return cache.promise;
   }
 
-  const staleData = existing?.data;
+  const staleData = cache.data;
 
-  const promise = fetcher()
+  cache.promise = fetchDatasetFromUpstream()
     .then((data) => {
-      cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+      cache.data = data;
+      cache.expiresAt = Date.now() + CACHE_TTL_MS;
       return data;
     })
     .catch((error) => {
-      if (staleData !== undefined) {
-        logger.warn("[DPA] Using stale cache after fetch failure", {
-          key,
-          error: getErrorMessage(error),
+      if (staleData) {
+        logger.warn("[DPA] Using stale cache", {
+          regionesCount: staleData.regiones.length,
+          reason: getErrorMessage(error),
         });
-        cache.set(key, { data: staleData, expiresAt: Date.now() + CACHE_TTL_MS });
+
+        cache.data = staleData;
         return staleData;
       }
 
-      cache.delete(key);
       throw error;
+    })
+    .finally(() => {
+      cache.promise = undefined;
     });
 
-  cache.set(key, { promise, expiresAt: now + CACHE_TTL_MS, data: staleData });
-  return promise;
+  return cache.promise;
 };
 
-const withFetchLog = async <T>(resource: string, fetcher: () => Promise<T>): Promise<T> => {
-  try {
-    const data = await fetcher();
-    logger.info(`[DPA] Fetch ${resource} OK`);
-    return data;
-  } catch (error) {
-    logger.warn(`[DPA] Fetch ${resource} FAIL: ${getErrorMessage(error)}`);
+export const getRegiones = async (): Promise<string[]> => {
+  const data = await getDataset();
+  return data.regiones.map((entry) => entry.region);
+};
 
-    if (error instanceof ErrorApi) {
-      throw error.status === 503
-        ? error
-        : new ErrorApi(DPA_UNAVAILABLE_MESSAGE, 503, error.details, "DPA_UNAVAILABLE");
-    }
-
-    throw dpaUnavailableError(resource, "unexpected_error", { error: getErrorMessage(error) });
+export const getComunas = async (regionName?: string): Promise<string[]> => {
+  const region = String(regionName ?? "").trim();
+  if (!region) {
+    return [];
   }
+
+  const data = await getDataset();
+  const comunas = data.comunasByRegion.get(normalizeKey(region)) ?? [];
+  return [...comunas];
 };
 
-export const getRegiones = async () => {
-  const baseUrl = getBaseUrl();
-  return withFetchLog("regiones", () =>
-    fetchWithCache("regiones", async () =>
-      normalizeList(await fetchJson<unknown>(`${baseUrl}/regiones`))
-    )
-  );
+export const getComunasByRegion = async (regionName: string): Promise<string[]> => {
+  return getComunas(regionName);
 };
 
-export const getComunas = async () => {
-  const baseUrl = getBaseUrl();
-  return withFetchLog("comunas", () =>
-    fetchWithCache("comunas", async () =>
-      normalizeList(await fetchJson<unknown>(`${baseUrl}/comunas`))
-    )
-  );
+export const getProvinciasByRegion = async (_regionName: string): Promise<string[]> => {
+  return [];
 };
 
-export const getProvinciasByRegion = async (regionCode: string) => {
-  const baseUrl = getBaseUrl();
-  const regionCodeNormalized = String(regionCode ?? "").trim();
-  const key = `regiones:${regionCodeNormalized}:provincias`;
-
-  return withFetchLog(`provincias region ${regionCodeNormalized}`, () =>
-    fetchWithCache(key, async () =>
-      normalizeList(
-        await fetchJson<unknown>(`${baseUrl}/regiones/${encodeURIComponent(regionCodeNormalized)}/provincias`)
-      )
-    )
-  );
-};
-
-export const getComunasByProvincia = async (provinciaCode: string) => {
-  const baseUrl = getBaseUrl();
-  const provinciaCodeNormalized = String(provinciaCode ?? "").trim();
-  const key = `provincias:${provinciaCodeNormalized}:comunas`;
-
-  return withFetchLog(`comunas provincia ${provinciaCodeNormalized}`, () =>
-    fetchWithCache(key, async () =>
-      normalizeList(
-        await fetchJson<unknown>(`${baseUrl}/provincias/${encodeURIComponent(provinciaCodeNormalized)}/comunas`)
-      )
-    )
-  );
-};
-
-export const getComunasByRegion = async (regionCode: string) => {
-  const baseUrl = getBaseUrl();
-  const regionCodeNormalized = String(regionCode ?? "").trim();
-  const key = `regiones:${regionCodeNormalized}:comunas`;
-
-  return withFetchLog(`comunas region ${regionCodeNormalized}`, () =>
-    fetchWithCache(key, async () => {
-      try {
-        return normalizeList(
-          await fetchJson<unknown>(`${baseUrl}/regiones/${encodeURIComponent(regionCodeNormalized)}/comunas`)
-        );
-      } catch (error) {
-        logger.warn("[DPA] Region comunas endpoint fallback", {
-          regionCode: regionCodeNormalized,
-          error: getErrorMessage(error),
-        });
-
-        const all = normalizeList(await fetchJson<unknown>(`${baseUrl}/comunas`));
-        const prefix = regionCodeNormalized.padStart(2, "0");
-
-        return all.filter((item) => {
-          if (!item || typeof item !== "object") return false;
-          const record = item as Record<string, unknown>;
-          const codigoComuna = String(record.codigo ?? "").trim();
-          const codigoPadre = String(record.codigo_padre ?? record.codigoPadre ?? "").trim();
-          return (
-            (codigoPadre && codigoPadre === regionCodeNormalized) ||
-            (codigoComuna && codigoComuna.startsWith(prefix))
-          );
-        });
-      }
-    })
-  );
+export const getComunasByProvincia = async (_provinciaName: string): Promise<string[]> => {
+  return [];
 };
