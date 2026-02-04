@@ -2,8 +2,9 @@ import { ErrorApi } from "../lib/errores";
 import { logger } from "../lib/logger";
 
 const DEFAULT_DPA_BASE_URL = "https://apis.digital.gob.cl/dpa";
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hora
-const REQUEST_TIMEOUT_MS = 10_000;
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 horas
+const REQUEST_TIMEOUT_MS = 8_000;
+export const DPA_UNAVAILABLE_MESSAGE = "Servicio de regiones/comunas no disponible";
 
 type CacheEntry<T> = {
   expiresAt: number;
@@ -23,6 +24,21 @@ const normalizeList = (data: unknown) => {
   return [];
 };
 
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+};
+
+const dpaUnavailableError = (url: string, reason: string, extra?: Record<string, unknown>) =>
+  new ErrorApi(DPA_UNAVAILABLE_MESSAGE, 503, { url, reason, ...(extra ?? {}) }, "DPA_UNAVAILABLE");
+
 const fetchJson = async <T>(url: string): Promise<T> => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -38,39 +54,41 @@ const fetchJson = async <T>(url: string): Promise<T> => {
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
-      logger.warn("dpa_response_error", {
+      logger.warn("[DPA] External fetch FAIL", {
         url,
         status: response.status,
         durationMs,
         bodyPreview: body.slice(0, 200),
       });
-      throw new ErrorApi("Error al consultar API DPA", 502, { status: response.status, url });
+      throw dpaUnavailableError(url, "upstream_status", { status: response.status });
     }
 
     const raw = await response.text();
     try {
-      const json = JSON.parse(raw) as T;
-      logger.info("dpa_response_ok", { url, status: response.status, durationMs });
-      return json;
+      const parsed = JSON.parse(raw) as T;
+      logger.debug("[DPA] External fetch OK", { url, durationMs });
+      return parsed;
     } catch (error) {
-      logger.warn("dpa_response_parse_error", {
+      logger.warn("[DPA] External parse FAIL", {
         url,
         durationMs,
-        error,
         bodyPreview: raw.slice(0, 200),
+        error: getErrorMessage(error),
       });
-      throw new ErrorApi("Respuesta invalida desde API DPA", 502, { url });
+      throw dpaUnavailableError(url, "invalid_json");
     }
   } catch (error) {
     if ((error as { name?: string }).name === "AbortError") {
-      logger.warn("dpa_timeout", { url, timeoutMs: REQUEST_TIMEOUT_MS });
-      throw new ErrorApi("Timeout al consultar API DPA", 502, { url, timeoutMs: REQUEST_TIMEOUT_MS });
+      logger.warn("[DPA] External fetch TIMEOUT", { url, timeoutMs: REQUEST_TIMEOUT_MS });
+      throw dpaUnavailableError(url, "timeout", { timeoutMs: REQUEST_TIMEOUT_MS });
     }
-    logger.warn("dpa_request_failed", { url, error });
+
     if (error instanceof ErrorApi) {
       throw error;
     }
-    throw new ErrorApi("Error al consultar API DPA", 502, { url });
+
+    logger.warn("[DPA] External fetch FAIL", { url, error: getErrorMessage(error) });
+    throw dpaUnavailableError(url, "network_error", { error: getErrorMessage(error) });
   } finally {
     clearTimeout(timeout);
   }
@@ -88,71 +106,126 @@ const fetchWithCache = async <T>(key: string, fetcher: () => Promise<T>): Promis
     return existing.promise;
   }
 
+  const staleData = existing?.data;
+
   const promise = fetcher()
     .then((data) => {
       cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
       return data;
     })
     .catch((error) => {
+      if (staleData !== undefined) {
+        logger.warn("[DPA] Using stale cache after fetch failure", {
+          key,
+          error: getErrorMessage(error),
+        });
+        cache.set(key, { data: staleData, expiresAt: Date.now() + CACHE_TTL_MS });
+        return staleData;
+      }
+
       cache.delete(key);
       throw error;
     });
 
-  cache.set(key, { promise, expiresAt: now + CACHE_TTL_MS });
+  cache.set(key, { promise, expiresAt: now + CACHE_TTL_MS, data: staleData });
   return promise;
+};
+
+const withFetchLog = async <T>(resource: string, fetcher: () => Promise<T>): Promise<T> => {
+  try {
+    const data = await fetcher();
+    logger.info(`[DPA] Fetch ${resource} OK`);
+    return data;
+  } catch (error) {
+    logger.warn(`[DPA] Fetch ${resource} FAIL: ${getErrorMessage(error)}`);
+
+    if (error instanceof ErrorApi) {
+      throw error.status === 503
+        ? error
+        : new ErrorApi(DPA_UNAVAILABLE_MESSAGE, 503, error.details, "DPA_UNAVAILABLE");
+    }
+
+    throw dpaUnavailableError(resource, "unexpected_error", { error: getErrorMessage(error) });
+  }
 };
 
 export const getRegiones = async () => {
   const baseUrl = getBaseUrl();
-  return fetchWithCache("regiones", async () =>
-    normalizeList(await fetchJson<unknown>(`${baseUrl}/regiones`))
+  return withFetchLog("regiones", () =>
+    fetchWithCache("regiones", async () =>
+      normalizeList(await fetchJson<unknown>(`${baseUrl}/regiones`))
+    )
   );
 };
 
 export const getComunas = async () => {
   const baseUrl = getBaseUrl();
-  return fetchWithCache("comunas", async () =>
-    normalizeList(await fetchJson<unknown>(`${baseUrl}/comunas`))
+  return withFetchLog("comunas", () =>
+    fetchWithCache("comunas", async () =>
+      normalizeList(await fetchJson<unknown>(`${baseUrl}/comunas`))
+    )
   );
 };
 
 export const getProvinciasByRegion = async (regionCode: string) => {
   const baseUrl = getBaseUrl();
-  const key = `regiones:${regionCode}:provincias`;
-  return fetchWithCache(key, async () =>
-    normalizeList(await fetchJson<unknown>(`${baseUrl}/regiones/${encodeURIComponent(regionCode)}/provincias`))
+  const regionCodeNormalized = String(regionCode ?? "").trim();
+  const key = `regiones:${regionCodeNormalized}:provincias`;
+
+  return withFetchLog(`provincias region ${regionCodeNormalized}`, () =>
+    fetchWithCache(key, async () =>
+      normalizeList(
+        await fetchJson<unknown>(`${baseUrl}/regiones/${encodeURIComponent(regionCodeNormalized)}/provincias`)
+      )
+    )
   );
 };
 
 export const getComunasByProvincia = async (provinciaCode: string) => {
   const baseUrl = getBaseUrl();
-  const key = `provincias:${provinciaCode}:comunas`;
-  return fetchWithCache(key, async () =>
-    normalizeList(await fetchJson<unknown>(`${baseUrl}/provincias/${encodeURIComponent(provinciaCode)}/comunas`))
+  const provinciaCodeNormalized = String(provinciaCode ?? "").trim();
+  const key = `provincias:${provinciaCodeNormalized}:comunas`;
+
+  return withFetchLog(`comunas provincia ${provinciaCodeNormalized}`, () =>
+    fetchWithCache(key, async () =>
+      normalizeList(
+        await fetchJson<unknown>(`${baseUrl}/provincias/${encodeURIComponent(provinciaCodeNormalized)}/comunas`)
+      )
+    )
   );
 };
 
 export const getComunasByRegion = async (regionCode: string) => {
   const baseUrl = getBaseUrl();
-  const key = `regiones:${regionCode}:comunas`;
+  const regionCodeNormalized = String(regionCode ?? "").trim();
+  const key = `regiones:${regionCodeNormalized}:comunas`;
 
-  return fetchWithCache(key, async () => {
-    try {
-      return normalizeList(
-        await fetchJson<unknown>(`${baseUrl}/regiones/${encodeURIComponent(regionCode)}/comunas`)
-      );
-    } catch (error) {
-      logger.warn("dpa_regiones_comunas_fallback", { regionCode, error });
-      const all = normalizeList(await fetchJson<unknown>(`${baseUrl}/comunas`));
-      const prefix = regionCode.padStart(2, "0");
+  return withFetchLog(`comunas region ${regionCodeNormalized}`, () =>
+    fetchWithCache(key, async () => {
+      try {
+        return normalizeList(
+          await fetchJson<unknown>(`${baseUrl}/regiones/${encodeURIComponent(regionCodeNormalized)}/comunas`)
+        );
+      } catch (error) {
+        logger.warn("[DPA] Region comunas endpoint fallback", {
+          regionCode: regionCodeNormalized,
+          error: getErrorMessage(error),
+        });
 
-      return all.filter((item) => {
-        if (!item || typeof item !== "object") return false;
-        const record = item as Record<string, unknown>;
-        const codigoComuna = String(record.codigo ?? "").trim();
-        const codigoPadre = String(record.codigo_padre ?? record.codigoPadre ?? "").trim();
-        return (codigoPadre && codigoPadre === regionCode) || (codigoComuna && codigoComuna.startsWith(prefix));
-      });
-    }
-  });
+        const all = normalizeList(await fetchJson<unknown>(`${baseUrl}/comunas`));
+        const prefix = regionCodeNormalized.padStart(2, "0");
+
+        return all.filter((item) => {
+          if (!item || typeof item !== "object") return false;
+          const record = item as Record<string, unknown>;
+          const codigoComuna = String(record.codigo ?? "").trim();
+          const codigoPadre = String(record.codigo_padre ?? record.codigoPadre ?? "").trim();
+          return (
+            (codigoPadre && codigoPadre === regionCodeNormalized) ||
+            (codigoComuna && codigoComuna.startsWith(prefix))
+          );
+        });
+      }
+    })
+  );
 };
