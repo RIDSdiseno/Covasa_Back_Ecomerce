@@ -10,20 +10,34 @@ import fs from "fs";
 
 const app = express();
 
-const envAllowed = (
-  process.env.FRONTEND_ORIGINS ||
-  process.env.FRONTEND_ORIGIN ||
-  process.env.ALLOWED_ORIGINS ||
-  ""
-)
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const parseOrigins = (raw: string) =>
+  raw
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+const envAllowed = [
+  ...parseOrigins(process.env.CORS_ORIGINS || ""),
+  ...parseOrigins(process.env.FRONTEND_ORIGINS || ""),
+  ...parseOrigins(process.env.FRONTEND_ORIGIN || ""),
+  ...parseOrigins(process.env.ALLOWED_ORIGINS || ""),
+];
 
 const allowAll = process.env.CORS_ALLOW_ALL === "true";
-const allowedOrigins = [...envAllowed];
+const allowedOrigins = [...new Set(envAllowed)];
+const publicBackendUrl =
+  (process.env.API_URL || process.env.BASE_URL || process.env.BACKEND_URL || "").trim() || undefined;
+const publicFrontUrl =
+  (process.env.ECOMMERCE_FRONT_URL || process.env.FRONT_URL || "").trim() || undefined;
 
-console.log("[CORS] allowedOrigins =", allowedOrigins, "allowAll=", allowAll);
+logger.info("runtime_config_loaded", {
+  nodeEnv: process.env.NODE_ENV || "development",
+  allowAllCors: allowAll,
+  allowedOriginsCount: allowedOrigins.length,
+  allowedOrigins,
+  publicBackendUrl,
+  publicFrontUrl,
+});
 
 type RouteLayer = {
   route?: { path: string; methods?: Record<string, boolean> };
@@ -92,6 +106,42 @@ const listarRutas = (appRef: typeof app) => {
 
 app.set("trust proxy", 1);
 
+app.use(requestLogger);
+
+app.use((req, res, next) => {
+  if (req.method !== "OPTIONS") {
+    return next();
+  }
+
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+  const requestedMethod =
+    typeof req.headers["access-control-request-method"] === "string"
+      ? req.headers["access-control-request-method"]
+      : undefined;
+  const requestedHeadersRaw = req.headers["access-control-request-headers"];
+  const requestedHeaders = Array.isArray(requestedHeadersRaw)
+    ? requestedHeadersRaw.join(",")
+    : requestedHeadersRaw;
+
+  logger.info("cors_preflight_start", {
+    origin,
+    path: req.path,
+    requestedMethod,
+    requestedHeaders,
+  });
+
+  res.on("finish", () => {
+    logger.info("cors_preflight_end", {
+      origin,
+      path: req.path,
+      requestedMethod,
+      status: res.statusCode,
+    });
+  });
+
+  return next();
+});
+
 const corsOptions = {
   origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
     if (!origin || allowAll) {
@@ -113,8 +163,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
-app.use(requestLogger);
 
 app.options("*", cors(corsOptions));
 
