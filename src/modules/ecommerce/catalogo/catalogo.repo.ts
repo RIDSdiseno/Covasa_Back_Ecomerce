@@ -17,18 +17,18 @@ export const buscarProductos = (filtros: FiltrosCatalogo) =>
       activo: true,
     },
     include: {
-      Inventario: {
+      inventarios: {
         select: {
           stock: true,
         },
       },
-      ProductoImagen: {
+      imagenes: {
         select: {
           url: true,
           orden: true,
         },
       },
-      ProductoVariante: {
+      variantes: {
         where: { activa: true },
         select: {
           id: true,
@@ -54,18 +54,18 @@ export const buscarProductoPorId = (id: string) =>
   prisma.producto.findFirst({
     where: { id, visibleEcommerce: true, activo: true },
     include: {
-      Inventario: {
+      inventarios: {
         select: {
           stock: true,
         },
       },
-      ProductoImagen: {
+      imagenes: {
         select: {
           url: true,
           orden: true,
         },
       },
-      ProductoVariante: {
+      variantes: {
         where: { activa: true },
         select: {
           id: true,

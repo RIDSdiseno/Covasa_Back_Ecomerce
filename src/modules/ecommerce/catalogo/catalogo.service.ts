@@ -21,6 +21,7 @@ type ProductoBase = {
   fotoUrl: string | null;
   precioGeneral: number;
   precioConDescto: number;
+  precioWeb: number;
   tipo: ProductoTipo;
   activo: boolean;
   tieneVariantes?: boolean;
@@ -30,13 +31,13 @@ type ProductoBase = {
   descripcionCorta?: string | null;
   descripcionTecnica?: string | null;
   minQuantity?: number;  // Cantidad mínima de compra
-  Inventario: { stock: number } | null;
-  ProductoImagen: { url: string; orden: number }[];
-  ProductoVariante?: VarianteBase[];
+  inventarios: { stock: number } | null;
+  imagenes: { url: string; orden: number }[];
+  variantes?: VarianteBase[];
 };
 
 const mapearProducto = (producto: ProductoBase) => {
-  const variantes = producto.ProductoVariante ?? [];
+  const variantes = producto.variantes ?? [];
   const tieneVariantes = producto.tieneVariantes === true && variantes.length > 0;
 
   // Calcular stock: si tiene variantes, suma de stocks de variantes; si no, stock de inventario
@@ -44,11 +45,14 @@ const mapearProducto = (producto: ProductoBase) => {
   if (tieneVariantes) {
     stockDisponible = variantes.reduce((sum, v) => sum + v.stock, 0);
   } else {
-    stockDisponible = producto.Inventario?.stock ?? 0;
+    stockDisponible = producto.inventarios?.stock ?? 0;
   }
 
-  // Calcular precio neto base (sin variantes)
-  const precioBase = producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral;
+  // Calcular precio neto base para ecommerce
+  // Prioridad: precioWeb > precioConDescto > precioGeneral
+  const precioBase = producto.precioWeb > 0
+    ? producto.precioWeb
+    : (producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral);
 
   // Calcular precios min/max de variantes
   let precioMinimo: number | undefined;
@@ -67,7 +71,7 @@ const mapearProducto = (producto: ProductoBase) => {
     }
   }
 
-  const imagenes = producto.ProductoImagen
+  const imagenes = producto.imagenes
     .slice()
     .sort((a, b) => a.orden - b.orden)
     .map((imagen) => imagen.url);
@@ -86,6 +90,7 @@ const mapearProducto = (producto: ProductoBase) => {
     precioNeto,
     precioLista: producto.precioGeneral,
     precioGeneral: producto.precioGeneral,
+    precioWeb: producto.precioWeb,
     precioConDescuento: producto.precioConDescto,
     precioConDescto: producto.precioConDescto,
     stockDisponible,

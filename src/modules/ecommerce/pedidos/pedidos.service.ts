@@ -291,7 +291,10 @@ export const crearPedidoServicio = async (payload: {
     if (variante && variante.precio !== null) {
       precioNeto = variante.precio;
     } else {
-      precioNeto = producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral;
+      // Prioridad: precioWeb > precioConDescto > precioGeneral
+      precioNeto = producto.precioWeb > 0
+        ? producto.precioWeb
+        : (producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral);
     }
 
     const subtotal = precioNeto * item.cantidad;

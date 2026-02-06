@@ -106,7 +106,10 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
       throw new ErrorApi("Producto no encontrado", 404, { id: item.productoId });
     }
 
-    const precioNeto = producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral;
+    // Prioridad: precioWeb > precioConDescto > precioGeneral
+    const precioNeto = producto.precioWeb > 0
+      ? producto.precioWeb
+      : (producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral);
     const subtotal = precioNeto * item.cantidad;
     const ivaMonto = Math.round((subtotal * ivaPct) / 100);
     const total = subtotal + ivaMonto;

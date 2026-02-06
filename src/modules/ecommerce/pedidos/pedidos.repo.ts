@@ -14,7 +14,7 @@ export const buscarProductosPorIds = (ids: string[], tx?: DbClient) =>
   db(tx).producto.findMany({
     where: { id: { in: ids }, activo: true, visibleEcommerce: true },
     include: {
-      ProductoVariante: {
+      variantes: {
         where: { activa: true },
         select: {
           id: true,

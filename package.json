@@ -11,7 +11,7 @@
     "prestart": "npm run build",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate": "echo ERROR: Las migraciones se gestionan desde el CRM. Usa solo 'npm run prisma:generate' && exit 1",
     "prisma:studio": "prisma studio",
     "prebuild": "prisma generate",
     "db:diagnostico": "ts-node src/scripts/diagnostico-db.ts",
