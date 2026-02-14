@@ -11,6 +11,8 @@ const contactoSchema = z
     mensaje: z.string().trim().max(1000).optional().nullable(),
     tipoObra: z.string().trim().max(120).optional().nullable(),
     ubicacion: z.string().trim().max(120).optional().nullable(),
+    region: z.string().trim().min(1).max(120),
+    comuna: z.string().trim().min(1).max(120),
   })
   .refine((data) => {
     const email = (data.email ?? "").trim();

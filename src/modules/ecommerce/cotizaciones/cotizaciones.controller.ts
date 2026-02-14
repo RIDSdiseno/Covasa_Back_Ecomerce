@@ -9,11 +9,19 @@ import {
 } from "./cotizaciones.service";
 
 // GET /api/ecommerce/cotizaciones
-// Output: listado paginado de cotizaciones ecommerce.
+// Output: listado paginado de cotizaciones del usuario autenticado.
 export const listarCotizaciones = manejarAsync(async (req: Request, res: Response) => {
+  const usuarioId = res.locals.auth?.sub as string;
   const query = cotizacionQuerySchema.parse(req.query);
-  const resultado = await listarCotizacionesServicio(query);
-  res.json({ ok: true, data: resultado });
+  const resultado = await listarCotizacionesServicio({ ...query, usuarioId });
+  res.json({
+    ok: true,
+    data: resultado.items,
+    page: resultado.page,
+    pageSize: resultado.pageSize,
+    total: resultado.total,
+    totalPages: resultado.totalPages,
+  });
 });
 
 // POST /api/ecommerce/cotizaciones (principal) y /api/cotizaciones (legacy)
@@ -39,6 +47,8 @@ export const crearCotizacion = manejarAsync(async (req: Request, res: Response) 
     extra: {
       tipoObra: payload.contacto.tipoObra ?? undefined,
       ubicacion: payload.contacto.ubicacion ?? undefined,
+      region: payload.contacto.region,
+      comuna: payload.contacto.comuna,
     },
     items: payload.items,
   });

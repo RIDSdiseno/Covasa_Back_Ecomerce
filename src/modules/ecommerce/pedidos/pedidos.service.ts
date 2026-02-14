@@ -51,6 +51,7 @@ type DespachoPayload = {
   ciudad?: string;
   region?: string;
   notas?: string;
+  rut?: string;
 };
 
 type ClienteDespacho = {
@@ -161,6 +162,7 @@ const resolverDespacho = (
       normalizarNullable(direccionPrincipal?.region) ||
       undefined,
     notas: normalizarTexto(despacho?.notas) || normalizarNullable(direccionPrincipal?.notas) || undefined,
+    rut: normalizarTexto(despacho?.rut) || undefined,
   };
 };
 
@@ -357,6 +359,7 @@ export const crearPedidoServicio = async (payload: {
         despachoCiudad: despachoFinal.ciudad,
         despachoRegion: despachoFinal.region,
         despachoNotas: despachoFinal.notas,
+        despachoRut: despachoFinal.rut,
         subtotalNeto,
         iva: ivaTotal,
         total,
@@ -485,6 +488,7 @@ export const crearPedidoDesdeCarritoServicio = async (
         despachoCiudad: despachoFinal.ciudad,
         despachoRegion: despachoFinal.region,
         despachoNotas: despachoFinal.notas,
+        despachoRut: despachoFinal.rut,
         subtotalNeto: totales.subtotalNeto,
         iva: totales.iva,
         total: totales.total,

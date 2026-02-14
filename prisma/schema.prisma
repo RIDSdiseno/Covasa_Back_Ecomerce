@@ -650,6 +650,7 @@ model EcommercePedido {
   despachoCiudad     String?
   despachoRegion     String?
   despachoNotas      String?
+  despachoRut        String?
   subtotalNeto       Int
   iva                Int
   total              Int
@@ -776,6 +777,9 @@ enum EcommerceMetodoPago {
   OTRO
   APPLEPAY_DEV
   MERCADOPAGO
+  EFECTIVO
+  CHEQUE
+  CREDITO_30_DIAS
 }
 
 enum StockAlertStatus {
