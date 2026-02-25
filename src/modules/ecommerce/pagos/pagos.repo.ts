@@ -1,6 +1,7 @@
 import {
   EcommerceEstadoPago,
   EcommerceEstadoPedido,
+  EcommerceMetodoPago,
   Prisma,
   PrismaClient,
 } from "@prisma/client";
@@ -68,6 +69,31 @@ export const buscarPagoPorId = (id: string, tx?: DbClient) =>
 export const buscarPagoPorReferencia = (referencia: string, tx?: DbClient) =>
   db(tx).ecommercePago.findFirst({
     where: { referencia },
+  });
+
+export const buscarPagoPendientePorPedidoMetodo = (
+  pedidoId: string,
+  metodo: EcommerceMetodoPago,
+  tx?: DbClient
+) =>
+  db(tx).ecommercePago.findFirst({
+    where: {
+      pedidoId,
+      metodo,
+      estado: EcommerceEstadoPago.PENDIENTE,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+export const listarPagosPorMetodo = (
+  metodo: EcommerceMetodoPago,
+  limit = 200,
+  tx?: DbClient
+) =>
+  db(tx).ecommercePago.findMany({
+    where: { metodo },
+    orderBy: { createdAt: "desc" },
+    take: limit,
   });
 
 export const actualizarPagoDatos = (

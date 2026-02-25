@@ -622,12 +622,14 @@ enum EcommerceMetodoPago {
   TRANSFERENCIA
   OTRO
   APPLEPAY_DEV
+  KLAP
 }
 
 enum EcommerceEstadoPago {
   PENDIENTE
   CONFIRMADO
   RECHAZADO
+  REEMBOLSADO
 }
 
 enum StockAlertStatus {

@@ -71,3 +71,29 @@ export const fetchRegiones = async () => {
 ## Railway
 - Variables requeridas: `DATABASE_URL`, `PORT`, `FRONTEND_ORIGIN`, `IVA_PCT`.
 - Recomendado: ejecutar `npm run prisma:migrate` en el deploy para crear tablas nuevas.
+
+## KLAP (Checkout Flex)
+- Variables backend requeridas:
+  - `KLAP_ENABLED=true|false`
+  - `KLAP_ENV=sandbox|prod`
+  - `KLAP_API_KEY=...`
+  - `KLAP_ORDERS_URL=...`
+  - `PUBLIC_BASE_URL=https://...`
+  - `KLAP_WEBHOOK_PATH=/api/ecommerce/payments/klap/webhook`
+  - `KLAP_RETURN_URL=/pago/klap` (opcional)
+- Flujo: crear pedido -> `POST /api/ecommerce/payments/klap` -> redireccionar a `redirectUrl` -> webhook KLAP -> pago confirmado/rechazado/reembolsado.
+- Firma webhook: `sha256(reference_id + order_id + KLAP_API_KEY)` comparada contra header `apikey`.
+- Cuando `KLAP_ENABLED=false`, las rutas KLAP responden `404`.
+
+## Probar Webhook KLAP en desarrollo
+1) Exponer backend local:
+   - `ngrok http 3001` o `cloudflared tunnel --url http://localhost:3001`
+2) Configurar:
+   - `PUBLIC_BASE_URL=<url-publica-del-tunnel>`
+   - `KLAP_WEBHOOK_PATH=/api/ecommerce/payments/klap/webhook`
+3) Flujo de prueba:
+   - Crear pedido desde checkout.
+   - Iniciar pago KLAP.
+   - Verificar `EcommercePago` en `PENDIENTE`.
+   - Disparar webhook (o completar pago en sandbox) y validar cambio a `CONFIRMADO/RECHAZADO`.
+   - Confirmado: validar `EcommercePedido.estado = PAGADO`, aparición en `mis-pagos` y PDF.
