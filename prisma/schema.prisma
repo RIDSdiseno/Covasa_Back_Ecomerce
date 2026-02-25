@@ -100,7 +100,6 @@ model Producto {
   fotoUrl            String?
   precioConDescto    Int                       @default(0)
   precioGeneral      Int                       @default(0)
-  precioWeb          Int                       @default(0)
   createdAt          DateTime                  @default(now())
   updatedAt          DateTime                  @updatedAt
   tipo               ProductoTipo              @default(Producto)
@@ -117,6 +116,7 @@ model Producto {
   unidadVenta        String?
   deletedAt          DateTime?
   minQuantity        Int                       @default(0)
+  precioWeb          Int                       @default(0)
   inventarios        Inventario?
   preciosProveedor   PrecioProveedor[]
   categoria          Categoria?                @relation(fields: [categoriaId], references: [id])
@@ -500,12 +500,12 @@ model EcommerceCotizacion {
   fleteTotalSnap     Int?
   fleteZonaSnap      String?
   tieneFlete         Boolean                   @default(false)
+  notasVenta         NotaVenta?
   crmCotizacion      CrmCotizacion?            @relation(fields: [crmCotizacionId], references: [id])
   ecommerceCliente   EcommerceCliente?         @relation(fields: [ecommerceClienteId], references: [id])
   fleteTarifa        FleteTarifa?              @relation(fields: [fleteTarifaId], references: [id])
   vendedor           Trabajador?               @relation("TrabajadorCotizaciones", fields: [vendedorId], references: [id])
   items              EcommerceCotizacionItem[]
-  notasVenta         NotaVenta[]
 
   @@index([clienteId], map: "ecommerce_cotizacion_clienteId_legacy_idx")
   @@index([ecommerceClienteId])
@@ -605,7 +605,7 @@ model EcommercePago {
   gatewayPayloadJson Json?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
-  notasVenta         NotaVenta[]
+  notasVenta         NotaVenta?
   pedido             EcommercePedido     @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 
   @@index([estado])
@@ -626,16 +626,16 @@ model IntegrationEcommercePago {
   estado                String?
   monto                 Int?
   referencia            String?
-  rutAsociado           String?
-  moneda                String                 @default("CLP")
-  externalTransactionId String?
-  metodoPago            EcommerceMetodoPago?
-  estadoPago            IntegrationPagoEstado?
-  fechaPago             DateTime?
   pagoCreatedAt         DateTime?
   pagoUpdatedAt         DateTime?
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
+  estadoPago            IntegrationPagoEstado?
+  externalTransactionId String?
+  fechaPago             DateTime?
+  metodoPago            EcommerceMetodoPago?
+  moneda                String                 @default("CLP")
+  rutAsociado           String?
 
   @@index([ecommercePagoId])
   @@index([pedidoId])
@@ -663,7 +663,6 @@ model EcommercePedido {
   despachoCiudad     String?
   despachoRegion     String?
   despachoNotas      String?
-  despachoRut        String?
   subtotalNeto       Int
   iva                Int
   total              Int
@@ -671,9 +670,10 @@ model EcommercePedido {
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
   crmCotizacionId    String?
+  despachoRut        String?
+  notasVenta         NotaVenta?
   direccion          EcommerceDireccion?   @relation("PedidoDireccion")
   pagos              EcommercePago[]
-  notasVenta         NotaVenta[]
   crmCotizacion      CrmCotizacion?        @relation(fields: [crmCotizacionId], references: [id])
   ecommerceCliente   EcommerceCliente?     @relation(fields: [ecommerceClienteId], references: [id])
   items              EcommercePedidoItem[]
@@ -722,8 +722,8 @@ model OrdenCompra {
   createdBy     String?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
-  proveedor     Proveedor         @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
   notasVenta    NotaVenta[]
+  proveedor     Proveedor         @relation(fields: [proveedorId], references: [id])
 
   @@unique([proveedorId, numero, fechaEmision, total])
   @@index([proveedorId, fechaEmision])
@@ -754,10 +754,10 @@ model NotaVenta {
   ordenCompraId           String?
   createdAt               DateTime             @default(now())
   updatedAt               DateTime             @updatedAt
-  ecommerceCotizacion     EcommerceCotizacion? @relation(fields: [ecommerceCotizacionId], references: [id], onDelete: SetNull)
-  ecommercePedido         EcommercePedido?     @relation(fields: [ecommercePedidoId], references: [id], onDelete: SetNull)
-  ecommercePago           EcommercePago?       @relation(fields: [ecommercePagoId], references: [id], onDelete: SetNull)
-  ordenCompra             OrdenCompra?         @relation(fields: [ordenCompraId], references: [id], onDelete: SetNull)
+  ecommerceCotizacion     EcommerceCotizacion? @relation(fields: [ecommerceCotizacionId], references: [id])
+  ecommercePago           EcommercePago?       @relation(fields: [ecommercePagoId], references: [id])
+  ecommercePedido         EcommercePedido?     @relation(fields: [ecommercePedidoId], references: [id])
+  ordenCompra             OrdenCompra?         @relation(fields: [ordenCompraId], references: [id])
 
   @@index([estado, createdAt])
   @@index([rutCliente])
@@ -878,6 +878,7 @@ enum EcommerceMetodoPago {
   OTRO
   APPLEPAY_DEV
   MERCADOPAGO
+  KLAP
   EFECTIVO
   CHEQUE
   CREDITO_30_DIAS

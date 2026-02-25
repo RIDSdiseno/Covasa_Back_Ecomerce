@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { NextFunction, Request, Response, Router } from "express";
 import {
   confirmarPago,
   crearPago,
@@ -23,14 +23,29 @@ import {
   obtenerEstadoStripe,
   recibirStripeWebhook,
 } from "../pagos/stripe.controller";
+import { crearKlapPago, recibirKlapWebhook } from "../pagos/klap.controller";
 import { requireApplePayDevEnabled } from "../../../middleware/requireApplePayDevEnabled";
 import { optionalAuth } from "../../../middleware/optionalAuth";
 
 const router = Router();
+const normalizarFlag = (value?: string) => (value ?? "").trim().toLowerCase();
+const klapHabilitado = () => {
+  const flag = normalizarFlag(process.env.KLAP_ENABLED);
+  return flag === "true" || flag === "1" || flag === "yes";
+};
+const requireKlapEnabled = (_req: Request, res: Response, next: NextFunction) => {
+  if (!klapHabilitado()) {
+    res.status(404).json({ ok: false, message: "Not found" });
+    return;
+  }
+  next();
+};
 
 router.post("/", crearPago);
 router.post("/mercadopago", crearMercadoPago);
 router.post("/transbank", crearTransbankPago);
+router.post("/klap", requireKlapEnabled, crearKlapPago);
+router.post("/klap/webhook", requireKlapEnabled, recibirKlapWebhook);
 router.post("/applepay-dev/create-intent", requireApplePayDevEnabled, crearApplePayDevIntent);
 router.post("/stripe/intent", crearStripeIntent);
 router.post("/stripe/create-intent", crearStripeCreateIntent);
