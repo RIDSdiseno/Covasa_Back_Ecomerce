@@ -879,12 +879,6 @@ enum EcommerceMetodoPago {
   APPLEPAY_DEV
 }
 
-enum EcommerceEstadoPago {
-  PENDIENTE
-  CONFIRMADO
-  RECHAZADO
-}
-
 enum StockAlertStatus {
   OPEN
   ACK
