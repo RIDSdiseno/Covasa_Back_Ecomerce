@@ -1,29 +1,11 @@
-<<<<<<< HEAD
-
-# deps/build
-node_modules/
-dist/
-.env
-
-node_modules/
-dist/
-.env
-
-=======
 # dependencies
 node_modules/
-**/node_modules/
-<<<<<<< HEAD
->>>>>>> e8741ed (actualizacion de dependencias y archivos de configuracion)
 
-dist/
-node_modules/
-.env
-
-
+# build
 dist/
 
-=======
+# environment variables
 .env
->>>>>>> c65ca45 (MICROSOFT LOGIN)
-.env
+.env.dev
+.env.prod
+.env.local

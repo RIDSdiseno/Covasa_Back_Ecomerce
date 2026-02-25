@@ -6,227 +6,139 @@ datasource db {
   provider = "postgresql"
 }
 
+/// =========================
+/// * TRABAJADORES
+/// * =========================
+model Trabajador {
+  id                   String                @id @default(uuid())
+  nombre               String
+  email                String                @unique
+  telefono             String?
+  cargo                WorkerRole            @default(Ventas)
+  estado               WorkerStatus          @default(Activo)
+  tenantId             String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  clientes             Cliente[]             @relation("TrabajadorClientes")
+  cotizacionesVendidas EcommerceCotizacion[] @relation("TrabajadorCotizaciones")
+
+  @@index([nombre])
+  @@index([cargo])
+  @@index([estado])
+}
+
+/// =========================
+/// * CLIENTES
+/// * =========================
 model Cliente {
-  id              String               @id
+  id              String               @id @default(uuid())
   nombre          String
   rut             String?
   email           String?
   telefono        String?
   estado          ClientStatus         @default(Activo)
   createdAt       DateTime             @default(now())
-  updatedAt       DateTime
+  updatedAt       DateTime             @updatedAt
   ciudad          String?
   comuna          String?
   direccion       String?
   personaContacto String?
   region          String?
   lineaCredito    Int                  @default(0)
-  metodoPagoUnico EcommerceMetodoPago? @ignore
+  metodoPagoUnico EcommerceMetodoPago?
   vendedorId      String?
-  Trabajador      Trabajador?          @relation(fields: [vendedorId], references: [id])
+  vendedor        Trabajador?          @relation("TrabajadorClientes", fields: [vendedorId], references: [id])
 
-  @@index([nombre])
   @@index([rut])
+  @@index([nombre])
   @@index([vendedorId])
 }
 
-model FleteTarifa {
-  id                   String                @id
-  nombre               String                @unique
-  zona                 String?
-  destino              String?
-  precio               Int                   @default(0)
-  activo               Boolean               @default(true)
-  observacion          String?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime
-  ecommerce_cotizacion EcommerceCotizacion[]
-
-  @@index([activo])
-  @@index([zona])
+/// =========================
+/// * PROVEEDORES
+/// * =========================
+model Proveedor {
+  id            String            @id @default(uuid())
+  nombre        String            @unique
+  rut           String?
+  email         String?
+  telefono      String?
+  contacto      String?
+  direccion     String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  ordenesCompra OrdenCompra[]
+  precios       PrecioProveedor[]
 }
 
-model ImportFila {
-  id         String     @id
-  loteId     String
-  nroFila    Int
-  ok         Boolean    @default(false)
-  error      String?
-  raw        Json?
-  createdAt  DateTime   @default(now())
-  ImportLote ImportLote @relation(fields: [loteId], references: [id], onDelete: Cascade)
+/// * =========================
+/// * CATEGORIAS
+/// * =========================
+model Categoria {
+  id          String     @id @default(uuid())
+  nombre      String
+  descripcion String?
+  slug        String     @unique
+  orden       Int        @default(0)
+  activa      Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  productos   Producto[]
 
-  @@index([loteId])
+  @@index([activa])
+  @@index([orden])
 }
 
-model ImportLote {
-  id            String       @id
-  tipo          String
-  archivoNombre String?
-  estado        String       @default("Procesado")
-  totalFilas    Int          @default(0)
-  filasOk       Int          @default(0)
-  filasError    Int          @default(0)
-  createdAt     DateTime     @default(now())
-  ImportFila    ImportFila[]
-}
-
-model Inventario {
-  id                String             @id
-  productoId        String             @unique
-  codigo            String?            @unique
-  stock             Int                @default(0)
-  minimo            Int                @default(0)
-  ubicacion         String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime
-  invNumero         Int                @unique @default(autoincrement())
-  Producto          Producto           @relation(fields: [productoId], references: [id], onDelete: Cascade)
-  StockAlert        StockAlert[]
-  StockCriticalRule StockCriticalRule?
-  StockMovimiento   StockMovimiento[]
-
-  @@index([productoId])
-  @@index([minimo])
-  @@index([stock])
-}
-
-model PrecioProveedor {
-  id          String    @id
-  productoId  String
-  proveedorId String
-  precio      Int
-  moneda      String    @default("CLP")
-  vigente     Boolean   @default(true)
-  updatedAt   DateTime
-  createdAt   DateTime  @default(now())
-  Producto    Producto  @relation(fields: [productoId], references: [id], onDelete: Cascade)
-  Proveedor   Proveedor @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
-
-  @@unique([productoId, proveedorId])
-  @@index([productoId])
-  @@index([proveedorId])
-}
-
+/// =========================
+/// * PRODUCTOS
+/// * =========================
 model Producto {
-  id                      String                    @id
-  sku                     String?                   @unique
-  nombre                  String
-  unidadMedida            String                    @default("unidad")
-  fotoUrl                 String?
-  precioConDescto         Int                       @default(0)
-  precioGeneral           Int                       @default(0)
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime
-  tipo                    ProductoTipo              @default(Producto)
-  fotoPublicId            String?
-  skuNumero               Int                       @unique @default(autoincrement())
-  // Campos de variantes
-  tieneVariantes          Boolean                   @default(false)
-  precioPorVariante       Boolean                   @default(false)
-  noControlaStock         Boolean                   @default(false)
-  activo                  Boolean                   @default(true)
-  visibleEcommerce        Boolean                   @default(false)
-  unidadVenta             String?
-  descripcionCorta        String?
-  descripcionTecnica      String?
-  categoriaId             String?
-  minQuantity             Int                       @default(0)  // Cantidad mínima de compra
-
-  Inventario              Inventario?
-  PrecioProveedor         PrecioProveedor[]
-  ProductoImagen          ProductoImagen[]
-  ProductoVariante        ProductoVariante[]
-  EcommerceCarritoItem    EcommerceCarritoItem[]
-  EcommerceCotizacionItem EcommerceCotizacionItem[]
-  EcommercePedidoItem     EcommercePedidoItem[]
+  id                 String                    @id @default(uuid())
+  sku                String?                   @unique
+  nombre             String
+  unidadMedida       String                    @default("unidad")
+  fotoUrl            String?
+  precioConDescto    Int                       @default(0)
+  precioGeneral      Int                       @default(0)
+  precioWeb          Int                       @default(0)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  tipo               ProductoTipo              @default(Producto)
+  fotoPublicId       String?
+  skuNumero          Int                       @unique @default(autoincrement())
+  categoriaId        String?
+  descripcionCorta   String?
+  descripcionTecnica String?
+  noControlaStock    Boolean                   @default(false)
+  precioPorVariante  Boolean                   @default(false)
+  tieneVariantes     Boolean                   @default(false)
+  visibleEcommerce   Boolean                   @default(false)
+  activo             Boolean                   @default(true)
+  unidadVenta        String?
+  deletedAt          DateTime?
+  minQuantity        Int                       @default(0)
+  inventarios        Inventario?
+  preciosProveedor   PrecioProveedor[]
+  categoria          Categoria?                @relation(fields: [categoriaId], references: [id])
+  auditoria          ProductoAuditoria[]
+  imagenes           ProductoImagen[]
+  variantes          ProductoVariante[]
+  carritoItems       EcommerceCarritoItem[]
+  cotizacionItems    EcommerceCotizacionItem[]
+  pedidoItems        EcommercePedidoItem[]
 
   @@index([nombre])
   @@index([tipo])
   @@index([fotoPublicId])
   @@index([categoriaId])
-  @@index([activo])
   @@index([visibleEcommerce])
   @@index([tieneVariantes])
+  @@index([activo])
 }
 
-model Proveedor {
-  id              String            @id
-  nombre          String            @unique
-  rut             String?
-  email           String?
-  telefono        String?
-  contacto        String?
-  direccion       String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime
-  PrecioProveedor PrecioProveedor[]
-}
-
-model StockMovimiento {
-  id           String              @id
-  inventarioId String
-  tipo         TipoMovimientoStock
-  cantidad     Int
-  nota         String?
-  createdAt    DateTime            @default(now())
-  Inventario   Inventario          @relation(fields: [inventarioId], references: [id], onDelete: Cascade)
-
-  @@index([inventarioId])
-  @@index([createdAt])
-  @@index([tipo])
-}
-
-model StockAlert {
-  id           String           @id
-  inventarioId String
-  threshold    Int
-  stockAtAlert Int
-  status       StockAlertStatus @default(OPEN)
-  openedAt     DateTime         @default(now())
-  ackAt        DateTime?
-  resolvedAt   DateTime?
-  lastSentAt   DateTime?
-  channel      String?
-  meta         Json?
-  isActive     Boolean          @default(true)
-  Inventario   Inventario       @relation(fields: [inventarioId], references: [id], onDelete: Cascade)
-
-  @@unique([inventarioId, isActive])
-  @@index([inventarioId, status])
-  @@index([status, openedAt])
-  @@index([inventarioId, isActive])
-}
-
-model StockCriticalRule {
-  id                String     @id
-  inventarioId      String     @unique
-  enabled           Boolean    @default(true)
-  thresholdOverride Int?
-  cooldownMinutes   Int        @default(360)
-  lastNotifiedAt    DateTime?
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime
-  Inventario        Inventario @relation(fields: [inventarioId], references: [id], onDelete: Cascade)
-
-  @@index([enabled])
-  @@index([inventarioId])
-}
-
-model ProductoImagen {
-  id         String   @id
-  productoId String
-  url        String
-  publicId   String
-  orden      Int      @default(0)
-  createdAt  DateTime @default(now())
-  Producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
-
-  @@unique([productoId, publicId])
-  @@index([productoId])
-  @@index([publicId])
-}
-
+/// * =========================
+/// * VARIANTES DE PRODUCTO
+/// * =========================
 model ProductoVariante {
   id          String   @id @default(uuid())
   productoId  String
@@ -240,7 +152,7 @@ model ProductoVariante {
   activa      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  Producto    Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  producto    Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
 
   @@unique([productoId, atributo, valor])
   @@index([productoId])
@@ -248,6 +160,196 @@ model ProductoVariante {
   @@index([activa])
 }
 
+/// =========================
+/// * IMAGENES PRODUCTO
+/// * =========================
+model ProductoImagen {
+  id         String   @id @default(uuid())
+  productoId String
+  url        String
+  publicId   String
+  orden      Int      @default(0)
+  createdAt  DateTime @default(now())
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@unique([productoId, publicId])
+  @@index([productoId])
+  @@index([publicId])
+}
+
+/// =========================
+/// * FLETES
+/// * =========================
+model FleteTarifa {
+  id           String                @id @default(uuid())
+  nombre       String                @unique
+  zona         String?
+  destino      String?
+  precio       Int                   @default(0)
+  activo       Boolean               @default(true)
+  observacion  String?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  cotizaciones EcommerceCotizacion[]
+
+  @@index([zona])
+  @@index([activo])
+}
+
+/// =========================
+/// * PRECIO POR PROVEEDOR
+/// * =========================
+model PrecioProveedor {
+  id          String    @id @default(uuid())
+  productoId  String
+  proveedorId String
+  precio      Int
+  moneda      String    @default("CLP")
+  vigente     Boolean   @default(true)
+  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
+  producto    Producto  @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  proveedor   Proveedor @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
+
+  @@unique([productoId, proveedorId])
+  @@index([proveedorId])
+  @@index([productoId])
+}
+
+/// =========================
+/// * INVENTARIO
+/// * =========================
+model Inventario {
+  id           String             @id @default(uuid())
+  productoId   String             @unique
+  codigo       String?            @unique
+  stock        Int                @default(0)
+  minimo       Int                @default(0)
+  ubicacion    String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  invNumero    Int                @unique @default(autoincrement())
+  producto     Producto           @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  alerts       StockAlert[]
+  criticalRule StockCriticalRule?
+  movimientos  StockMovimiento[]
+
+  @@index([productoId])
+  @@index([stock])
+  @@index([minimo])
+}
+
+/// =========================
+/// * MOVIMIENTOS STOCK
+/// * =========================
+model StockMovimiento {
+  id           String              @id @default(uuid())
+  inventarioId String
+  tipo         TipoMovimientoStock
+  cantidad     Int
+  nota         String?
+  createdAt    DateTime            @default(now())
+  inventario   Inventario          @relation(fields: [inventarioId], references: [id], onDelete: Cascade)
+
+  @@index([inventarioId])
+  @@index([tipo])
+  @@index([createdAt])
+}
+
+/// =========================
+/// * AUDITORIA DE PRODUCTOS
+/// =========================
+model ProductoAuditoria {
+  id            String                @id @default(uuid())
+  productoId    String
+  tipo          TipoAuditoriaProducto
+  descripcion   String
+  valorAnterior String?
+  valorNuevo    String?
+  metadata      Json?
+  usuarioId     String?
+  usuarioNombre String?
+  createdAt     DateTime              @default(now())
+  producto      Producto              @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@index([productoId])
+  @@index([tipo])
+  @@index([createdAt])
+}
+
+/// =========================
+/// * STOCK CRITICO: REGLAS
+/// * =========================
+model StockCriticalRule {
+  id                String     @id @default(uuid())
+  inventarioId      String     @unique
+  enabled           Boolean    @default(true)
+  thresholdOverride Int?
+  cooldownMinutes   Int        @default(360)
+  lastNotifiedAt    DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  inventario        Inventario @relation(fields: [inventarioId], references: [id], onDelete: Cascade)
+
+  @@index([enabled])
+  @@index([inventarioId])
+}
+
+/// =========================
+/// * STOCK CRITICO: ALERTAS
+/// * =========================
+model StockAlert {
+  id           String           @id @default(uuid())
+  inventarioId String
+  threshold    Int
+  stockAtAlert Int
+  status       StockAlertStatus @default(OPEN)
+  openedAt     DateTime         @default(now())
+  ackAt        DateTime?
+  resolvedAt   DateTime?
+  lastSentAt   DateTime?
+  channel      String?
+  meta         Json?
+  isActive     Boolean          @default(true)
+  inventario   Inventario       @relation(fields: [inventarioId], references: [id], onDelete: Cascade)
+
+  @@unique([inventarioId, isActive])
+  @@index([inventarioId, status])
+  @@index([inventarioId, isActive])
+  @@index([status, openedAt])
+}
+
+/// =========================
+/// * IMPORT (EXCEL)
+/// * =========================
+model ImportLote {
+  id            String       @id @default(uuid())
+  tipo          String
+  archivoNombre String?
+  estado        String       @default("Procesado")
+  totalFilas    Int          @default(0)
+  filasOk       Int          @default(0)
+  filasError    Int          @default(0)
+  createdAt     DateTime     @default(now())
+  filas         ImportFila[]
+}
+
+model ImportFila {
+  id        String     @id @default(uuid())
+  loteId    String
+  nroFila   Int
+  ok        Boolean    @default(false)
+  error     String?
+  raw       Json?
+  createdAt DateTime   @default(now())
+  lote      ImportLote @relation(fields: [loteId], references: [id], onDelete: Cascade)
+
+  @@index([loteId])
+}
+
+/// =========================
+/// * CRM COTIZACIONES (LEGACY)
+/// * =========================
 model CrmCotizacion {
   id                       String               @id @default(uuid())
   clienteId                String?
@@ -271,29 +373,33 @@ model CrmCotizacion {
   ecommerceCotizacion      EcommerceCotizacion?
   ecommercePedidos         EcommercePedido[]
 
-  @@index([createdAt])
   @@index([estado])
+  @@index([createdAt])
 }
 
+/// =========================
+/// * USUARIO ECOMMERCE
+/// * =========================
 model EcommerceUsuario {
-  id               String       @id @default(uuid())
+  id               String            @id @default(uuid())
   nombre           String
-  email            String?      @unique
+  email            String?           @unique
   telefono         String?
   passwordHash     String?
-  estado           String       @default("ACTIVO")
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-  authProvider     AuthProvider @default(LOCAL)
-
-  microsoftSubject String?      @unique
-  googleSubject    String?      @unique
-
+  estado           String            @default("ACTIVO")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  authProvider     AuthProvider      @default(LOCAL)
+  microsoftSubject String?           @unique
+  googleSubject    String?           @unique
   cliente          EcommerceCliente?
 
   @@map("ecommerce_usuario")
 }
 
+/// =========================
+/// * CLIENTE ECOMMERCE
+/// * =========================
 model EcommerceCliente {
   id            String                @id @default(uuid())
   usuarioId     String?               @unique
@@ -314,33 +420,9 @@ model EcommerceCliente {
   @@map("ecommerce_cliente")
 }
 
-model EcommerceDireccion {
-  id                 String            @id @default(uuid())
-  ecommerceClienteId String?
-  pedidoId           String?           @unique
-  etiqueta           String?
-  nombreRecibe       String            @map("nombreContacto")
-  telefonoRecibe     String            @map("telefono")
-  email              String
-  calle              String            @map("direccion")
-  numero             String?
-  depto              String?
-  comuna             String
-  ciudad             String?
-  region             String
-  codigoPostal       String?
-  notas              String?
-  principal          Boolean           @default(false) @map("esPrincipal")
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  ecommerceCliente   EcommerceCliente? @relation(fields: [ecommerceClienteId], references: [id])
-  pedido             EcommercePedido?  @relation("PedidoDireccion", fields: [pedidoId], references: [id], onDelete: Cascade)
-
-  @@index([ecommerceClienteId])
-  @@index([ecommerceClienteId, principal])
-  @@map("ecommerce_direccion")
-}
-
+/// =========================
+/// * CARRITO
+/// * =========================
 model EcommerceCarrito {
   id                 String                 @id @default(uuid())
   ecommerceClienteId String?
@@ -351,8 +433,8 @@ model EcommerceCarrito {
   ecommerceCliente   EcommerceCliente?      @relation(fields: [ecommerceClienteId], references: [id])
   items              EcommerceCarritoItem[]
 
-  @@index([ecommerceClienteId])
   @@index([clienteId], map: "ecommerce_carrito_clienteId_legacy_idx")
+  @@index([ecommerceClienteId])
   @@index([estado])
   @@map("ecommerce_carrito")
 }
@@ -377,6 +459,9 @@ model EcommerceCarritoItem {
   @@map("ecommerce_carrito_item")
 }
 
+/// =========================
+/// * COTIZACION (TABLA UNICA)
+/// * =========================
 model EcommerceCotizacion {
   id                 String                    @id @default(uuid())
   correlativo        Int                       @default(autoincrement())
@@ -417,18 +502,19 @@ model EcommerceCotizacion {
   tieneFlete         Boolean                   @default(false)
   crmCotizacion      CrmCotizacion?            @relation(fields: [crmCotizacionId], references: [id])
   ecommerceCliente   EcommerceCliente?         @relation(fields: [ecommerceClienteId], references: [id])
-  FleteTarifa        FleteTarifa?              @relation(fields: [fleteTarifaId], references: [id])
-  Trabajador         Trabajador?               @relation(fields: [vendedorId], references: [id])
+  fleteTarifa        FleteTarifa?              @relation(fields: [fleteTarifaId], references: [id])
+  vendedor           Trabajador?               @relation("TrabajadorCotizaciones", fields: [vendedorId], references: [id])
   items              EcommerceCotizacionItem[]
+  notasVenta         NotaVenta[]
 
-  @@index([ecommerceClienteId])
   @@index([clienteId], map: "ecommerce_cotizacion_clienteId_legacy_idx")
+  @@index([ecommerceClienteId])
   @@index([estado])
-  @@index([createdAt])
   @@index([estadoCrm])
-  @@index([fleteTarifaId])
-  @@index([tieneFlete])
+  @@index([createdAt])
   @@index([vendedorId])
+  @@index([tieneFlete])
+  @@index([fleteTarifaId])
   @@map("ecommerce_cotizacion")
 }
 
@@ -455,6 +541,39 @@ model EcommerceCotizacionItem {
   @@map("ecommerce_cotizacion_item")
 }
 
+/// =========================
+/// * DIRECCIONES
+/// * =========================
+model EcommerceDireccion {
+  id                 String            @id @default(uuid())
+  ecommerceClienteId String?
+  pedidoId           String?           @unique
+  etiqueta           String?
+  nombreRecibe       String            @map("nombreContacto")
+  telefonoRecibe     String            @map("telefono")
+  email              String
+  calle              String            @map("direccion")
+  numero             String?
+  depto              String?
+  comuna             String
+  ciudad             String?
+  region             String
+  codigoPostal       String?
+  notas              String?
+  principal          Boolean           @default(false) @map("esPrincipal")
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  ecommerceCliente   EcommerceCliente? @relation(fields: [ecommerceClienteId], references: [id])
+  pedido             EcommercePedido?  @relation("PedidoDireccion", fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([ecommerceClienteId, principal])
+  @@index([ecommerceClienteId])
+  @@map("ecommerce_direccion")
+}
+
+/// =========================
+/// * NOTIFICACIONES
+/// * =========================
 model EcommerceNotificacion {
   id              String   @id @default(uuid())
   tipo            String
@@ -472,6 +591,9 @@ model EcommerceNotificacion {
   @@map("ecommerce_notificacion")
 }
 
+/// =========================
+/// * PAGOS
+/// * =========================
 model EcommercePago {
   id                 String              @id @default(uuid())
   pedidoId           String
@@ -483,6 +605,7 @@ model EcommercePago {
   gatewayPayloadJson Json?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+  notasVenta         NotaVenta[]
   pedido             EcommercePedido     @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 
   @@index([estado])
@@ -490,6 +613,42 @@ model EcommercePago {
   @@map("ecommerce_pago")
 }
 
+/// Tabla de integracion para sincronizar pagos del ecommerce
+model IntegrationEcommercePago {
+  id                    String                 @id @default(uuid())
+  ecommercePagoId       String                 @unique
+  pedidoId              String?
+  pedidoCodigo          String?
+  pedidoCorrelativo     Int?
+  crmCotizacionId       String?
+  vendedorId            String?
+  metodo                String?
+  estado                String?
+  monto                 Int?
+  referencia            String?
+  rutAsociado           String?
+  moneda                String                 @default("CLP")
+  externalTransactionId String?
+  metodoPago            EcommerceMetodoPago?
+  estadoPago            IntegrationPagoEstado?
+  fechaPago             DateTime?
+  pagoCreatedAt         DateTime?
+  pagoUpdatedAt         DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@index([ecommercePagoId])
+  @@index([pedidoId])
+  @@index([crmCotizacionId])
+  @@index([rutAsociado])
+  @@index([estadoPago])
+  @@index([fechaPago])
+  @@index([externalTransactionId])
+}
+
+/// =========================
+/// * PEDIDOS
+/// * =========================
 model EcommercePedido {
   id                 String                @id @default(uuid())
   correlativo        Int                   @default(autoincrement())
@@ -504,6 +663,7 @@ model EcommercePedido {
   despachoCiudad     String?
   despachoRegion     String?
   despachoNotas      String?
+  despachoRut        String?
   subtotalNeto       Int
   iva                Int
   total              Int
@@ -513,12 +673,13 @@ model EcommercePedido {
   crmCotizacionId    String?
   direccion          EcommerceDireccion?   @relation("PedidoDireccion")
   pagos              EcommercePago[]
+  notasVenta         NotaVenta[]
   crmCotizacion      CrmCotizacion?        @relation(fields: [crmCotizacionId], references: [id])
   ecommerceCliente   EcommerceCliente?     @relation(fields: [ecommerceClienteId], references: [id])
   items              EcommercePedidoItem[]
 
-  @@index([ecommerceClienteId])
   @@index([clienteId], map: "ecommerce_pedido_clienteId_legacy_idx")
+  @@index([ecommerceClienteId])
   @@index([estado])
   @@map("ecommerce_pedido")
 }
@@ -543,32 +704,105 @@ model EcommercePedidoItem {
   @@map("ecommerce_pedido_item")
 }
 
-model Trabajador {
-  id                   String                @id
-  nombre               String
-  email                String                @unique
-  telefono             String?
-  cargo                WorkerRole            @default(Ventas)
-  estado               WorkerStatus          @default(Activo)
-  tenantId             String?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime
-  Cliente              Cliente[]
-  ecommerce_cotizacion EcommerceCotizacion[]
+model OrdenCompra {
+  id            String            @id @default(uuid())
+  correlativo   Int               @default(autoincrement())
+  codigo        String            @unique
+  proveedorId   String
+  numero        String
+  fechaEmision  DateTime
+  moneda        String            @default("CLP")
+  subtotalNeto  Int               @default(0)
+  iva           Int               @default(0)
+  total         Int
+  estado        OrdenCompraEstado @default(BORRADOR)
+  emitida       Boolean           @default(false)
+  emitidaAt     DateTime?
+  observaciones String?
+  createdBy     String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  proveedor     Proveedor         @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
+  notasVenta    NotaVenta[]
 
-  @@index([cargo])
-  @@index([estado])
-  @@index([nombre])
+  @@unique([proveedorId, numero, fechaEmision, total])
+  @@index([proveedorId, fechaEmision])
+  @@index([estado, emitida, createdAt])
 }
 
-enum OrigenCliente {
-  CLIENTE_EMPRESA
-  CLIENTE_ECOMMERCE
+model NotaVenta {
+  id                      String               @id @default(uuid())
+  correlativo             Int                  @default(autoincrement())
+  codigo                  String               @unique
+  estado                  NotaVentaEstado      @default(BORRADOR)
+  origen                  NotaVentaOrigen      @default(COTIZACION)
+  moneda                  String               @default("CLP")
+  rutCliente              String?
+  clienteNombreSnapshot   String
+  clienteEmailSnapshot    String?
+  clienteTelefonoSnapshot String?
+  subtotalNeto            Int
+  iva                     Int
+  total                   Int
+  observaciones           String?
+  createdBy               String?
+  emittedAt               DateTime?
+  paidAt                  DateTime?
+  ecommerceCotizacionId   String?              @unique
+  ecommercePedidoId       String?              @unique
+  ecommercePagoId         String?              @unique
+  ordenCompraId           String?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  ecommerceCotizacion     EcommerceCotizacion? @relation(fields: [ecommerceCotizacionId], references: [id], onDelete: SetNull)
+  ecommercePedido         EcommercePedido?     @relation(fields: [ecommercePedidoId], references: [id], onDelete: SetNull)
+  ecommercePago           EcommercePago?       @relation(fields: [ecommercePagoId], references: [id], onDelete: SetNull)
+  ordenCompra             OrdenCompra?         @relation(fields: [ordenCompraId], references: [id], onDelete: SetNull)
+
+  @@index([estado, createdAt])
+  @@index([rutCliente])
 }
 
-enum EcommerceClienteTipo {
-  NATURAL
-  EMPRESA
+model CarteraEmpresa {
+  id                String               @id @default(uuid())
+  tipo              CarteraTipo
+  estado            CarteraEstado        @default(PENDIENTE)
+  contraparteNombre String
+  contraparteRut    String?
+  formaPago         EcommerceMetodoPago?
+  referenciaExterna String?
+  descripcion       String?
+  moneda            String               @default("CLP")
+  montoTotal        Int
+  saldoPendiente    Int
+  fechaDocumento    DateTime
+  fechaVencimiento  DateTime?
+  cuotasTotal       Int                  @default(1)
+  cuotaActual       Int                  @default(1)
+  proximaCuotaAt    DateTime?
+  observaciones     String?
+  createdBy         String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([estado, fechaVencimiento])
+  @@index([tipo, createdAt])
+  @@index([contraparteRut])
+}
+
+/// =========================
+/// * ENUMS
+/// * =========================
+enum WorkerStatus {
+  Activo
+  Inactivo
+}
+
+enum WorkerRole {
+  Ventas
+  Cobranza
+  Bodega
+  Administracion
 }
 
 enum ClientStatus {
@@ -579,12 +813,31 @@ enum ClientStatus {
 enum ProductoTipo {
   Producto
   Servicio
+  Accesorio
+  ServicioInterno
 }
 
 enum TipoMovimientoStock {
   Entrada
   Salida
   Ajuste
+  BajaInventario
+}
+
+enum TipoAuditoriaProducto {
+  CREADO
+  EDITADO
+  ELIMINADO
+  RESTAURADO
+  VISIBLE_ECOMMERCE
+  OCULTO_ECOMMERCE
+  STOCK_ENTRADA
+  STOCK_SALIDA
+  STOCK_AJUSTE
+  PRECIO_MODIFICADO
+  CATEGORIA_CAMBIADA
+  VARIANTE_AGREGADA
+  VARIANTE_ELIMINADA
 }
 
 enum EcommerceEstadoCarrito {
@@ -598,12 +851,14 @@ enum EcommerceEstadoCotizacion {
   EN_REVISION
   RESPONDIDA
   CERRADA
+  PAGADA
 }
 
-enum AuthProvider {
-  LOCAL
-  MICROSOFT
-  GOOGLE
+enum EcommerceEstadoPago {
+  PENDIENTE
+  CONFIRMADO
+  RECHAZADO
+  REEMBOLSADO
 }
 
 enum EcommerceEstadoPedido {
@@ -622,14 +877,12 @@ enum EcommerceMetodoPago {
   TRANSFERENCIA
   OTRO
   APPLEPAY_DEV
-  KLAP
 }
 
 enum EcommerceEstadoPago {
   PENDIENTE
   CONFIRMADO
   RECHAZADO
-  REEMBOLSADO
 }
 
 enum StockAlertStatus {
@@ -650,14 +903,58 @@ enum CrmTipoCierre {
   COMPRA
 }
 
-enum WorkerRole {
-  Ventas
-  Cobranza
-  Bodega
-  Administracion
+enum EcommerceClienteTipo {
+  NATURAL
+  EMPRESA
 }
 
-enum WorkerStatus {
-  Activo
-  Inactivo
+enum OrigenCliente {
+  CLIENTE_EMPRESA
+  CLIENTE_ECOMMERCE
+}
+
+enum AuthProvider {
+  LOCAL
+  MICROSOFT
+  GOOGLE
+}
+
+enum IntegrationPagoEstado {
+  PAGADO
+  PENDIENTE
+  RECHAZADO
+  REEMBOLSADO
+}
+
+enum NotaVentaEstado {
+  BORRADOR
+  EMITIDA
+  PAGADA
+  ANULADA
+}
+
+enum NotaVentaOrigen {
+  COTIZACION
+  PEDIDO
+  PAGO
+  MANUAL
+}
+
+enum OrdenCompraEstado {
+  BORRADOR
+  EMITIDA
+  ANULADA
+}
+
+enum CarteraTipo {
+  EGRESO
+  CREDITO_SOLICITADO
+}
+
+enum CarteraEstado {
+  PENDIENTE
+  PAGADO
+  VENCIDO
+  REPROGRAMADO
+  CANCELADO
 }

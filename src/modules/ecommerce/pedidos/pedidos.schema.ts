@@ -14,6 +14,7 @@ export const pedidoCrearSchema = z.object({
       ciudad: z.string().max(100).optional(),
       region: z.string().max(100).optional(),
       notas: z.string().max(500).optional(),
+      rut: z.string().max(20).optional(),
     })
     .optional(),
   items: z
@@ -38,6 +39,7 @@ export const pedidoDesdeCarritoSchema = z.object({
       ciudad: z.string().max(100).optional(),
       region: z.string().max(100).optional(),
       notas: z.string().max(500).optional(),
+      rut: z.string().max(20).optional(),
     })
     .optional(),
 });

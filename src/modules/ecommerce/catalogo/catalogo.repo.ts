@@ -11,24 +11,31 @@ type FiltrosCatalogo = {
 export const buscarProductos = (filtros: FiltrosCatalogo) =>
   prisma.producto.findMany({
     where: {
-      nombre: filtros.q ? { contains: filtros.q, mode: "insensitive" } : undefined,
       tipo: filtros.tipo,
       visibleEcommerce: true,
       activo: true,
+      OR: filtros.q
+        ? [
+            { nombre: { contains: filtros.q, mode: "insensitive" } },
+            { sku: { contains: filtros.q, mode: "insensitive" } },
+            { categoria: { is: { nombre: { contains: filtros.q, mode: "insensitive" } } } },
+            { categoria: { is: { slug: { contains: filtros.q, mode: "insensitive" } } } },
+          ]
+        : undefined,
     },
     include: {
-      Inventario: {
+      inventarios: {
         select: {
           stock: true,
         },
       },
-      ProductoImagen: {
+      imagenes: {
         select: {
           url: true,
           orden: true,
         },
       },
-      ProductoVariante: {
+      variantes: {
         where: { activa: true },
         select: {
           id: true,
@@ -41,6 +48,13 @@ export const buscarProductos = (filtros: FiltrosCatalogo) =>
           orden: true,
         },
         orderBy: [{ atributo: "asc" }, { orden: "asc" }, { valor: "asc" }],
+      },
+      categoria: {
+        select: {
+          id: true,
+          nombre: true,
+          slug: true,
+        },
       },
     },
     orderBy: {
@@ -54,18 +68,18 @@ export const buscarProductoPorId = (id: string) =>
   prisma.producto.findFirst({
     where: { id, visibleEcommerce: true, activo: true },
     include: {
-      Inventario: {
+      inventarios: {
         select: {
           stock: true,
         },
       },
-      ProductoImagen: {
+      imagenes: {
         select: {
           url: true,
           orden: true,
         },
       },
-      ProductoVariante: {
+      variantes: {
         where: { activa: true },
         select: {
           id: true,
@@ -78,6 +92,13 @@ export const buscarProductoPorId = (id: string) =>
           orden: true,
         },
         orderBy: [{ atributo: "asc" }, { orden: "asc" }, { valor: "asc" }],
+      },
+      categoria: {
+        select: {
+          id: true,
+          nombre: true,
+          slug: true,
+        },
       },
     },
   });

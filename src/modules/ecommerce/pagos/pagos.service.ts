@@ -350,42 +350,53 @@ export const listarPagosIntegracionServicio = async (params: {
 }) => {
   const pagos = await listarPagosParaIntegracion(params);
 
-  return pagos.map((pago) => ({
-    pago: {
-      id: pago.id,
-      pedidoId: pago.pedidoId,
-      metodo: pago.metodo,
-      estado: pago.estado,
-      monto: pago.monto,
-      referencia: pago.referencia,
-      createdAt: pago.createdAt,
-      updatedAt: pago.updatedAt,
-    },
-    pedido: pago.pedido
-      ? {
-          id: pago.pedido.id,
-          correlativo: pago.pedido.correlativo,
-          codigo: pago.pedido.codigo,
-          ecommerceClienteId: pago.pedido.ecommerceClienteId,
-          clienteId: pago.pedido.clienteId,
-          despachoNombre: pago.pedido.despachoNombre,
-          despachoTelefono: pago.pedido.despachoTelefono,
-          despachoEmail: pago.pedido.despachoEmail,
-          despachoDireccion: pago.pedido.despachoDireccion,
-          despachoComuna: pago.pedido.despachoComuna,
-          despachoCiudad: pago.pedido.despachoCiudad,
-          despachoRegion: pago.pedido.despachoRegion,
-          subtotalNeto: pago.pedido.subtotalNeto,
-          iva: pago.pedido.iva,
-          total: pago.pedido.total,
-          estado: pago.pedido.estado,
-          createdAt: pago.pedido.createdAt,
-          updatedAt: pago.pedido.updatedAt,
-          crmCotizacionId: pago.pedido.crmCotizacionId,
-          vendedorId: pago.pedido.crmCotizacion?.vendedorId ?? null,
-        }
-      : null,
-  }));
+  return pagos.map((pago) => {
+    const proveedor = construirProveedorPago(pago);
+    const moneda = extraerMonedaPago(pago.gatewayPayloadJson);
+    const rutAsociado = pago.pedido?.ecommerceCliente?.rut || pago.pedido?.despachoRut || null;
+
+    return {
+      pago: {
+        id: pago.id,
+        pedidoId: pago.pedidoId,
+        metodo: pago.metodo,
+        estado: pago.estado,
+        monto: pago.monto,
+        referencia: pago.referencia,
+        moneda: moneda || "CLP",
+        externalTransactionId: proveedor.referencia || pago.referencia || null,
+        rutAsociado,
+        fechaPago: pago.createdAt,
+        createdAt: pago.createdAt,
+        updatedAt: pago.updatedAt,
+      },
+      pedido: pago.pedido
+        ? {
+            id: pago.pedido.id,
+            correlativo: pago.pedido.correlativo,
+            codigo: pago.pedido.codigo,
+            ecommerceClienteId: pago.pedido.ecommerceClienteId,
+            clienteId: pago.pedido.clienteId,
+            despachoNombre: pago.pedido.despachoNombre,
+            despachoRut: pago.pedido.despachoRut,
+            despachoTelefono: pago.pedido.despachoTelefono,
+            despachoEmail: pago.pedido.despachoEmail,
+            despachoDireccion: pago.pedido.despachoDireccion,
+            despachoComuna: pago.pedido.despachoComuna,
+            despachoCiudad: pago.pedido.despachoCiudad,
+            despachoRegion: pago.pedido.despachoRegion,
+            subtotalNeto: pago.pedido.subtotalNeto,
+            iva: pago.pedido.iva,
+            total: pago.pedido.total,
+            estado: pago.pedido.estado,
+            createdAt: pago.pedido.createdAt,
+            updatedAt: pago.pedido.updatedAt,
+            crmCotizacionId: pago.pedido.crmCotizacionId,
+            vendedorId: pago.pedido.crmCotizacion?.vendedorId ?? null,
+          }
+        : null,
+    };
+  });
 };
 
 // Obtiene un pago con datos para boleta/recibo (sin token).

@@ -101,6 +101,8 @@ export const construirObservaciones = (datos: {
   comunaRegion?: string;
   detalleAdicional?: string;
   ubicacion?: string;
+  region?: string;
+  comuna?: string;
 }) => {
   const observaciones = normalizarTexto(datos.observaciones);
   const direccion = normalizarTexto(datos.direccion);
@@ -111,6 +113,8 @@ export const construirObservaciones = (datos: {
   const comunaRegion = normalizarTexto(datos.comunaRegion);
   const detalleAdicional = normalizarTexto(datos.detalleAdicional);
   const ubicacion = normalizarTexto(datos.ubicacion);
+  const region = normalizarTexto(datos.region);
+  const comuna = normalizarTexto(datos.comuna);
 
   const payload: Record<string, string> = {};
 
@@ -123,6 +127,8 @@ export const construirObservaciones = (datos: {
   if (comunaRegion) payload.comunaRegion = comunaRegion;
   if (detalleAdicional) payload.detalleAdicional = detalleAdicional;
   if (ubicacion) payload.ubicacion = ubicacion;
+  if (region) payload.region = region;
+  if (comuna) payload.comuna = comuna;
 
   const tieneDatos = Object.keys(payload).length > 0;
   if (!tieneDatos) {

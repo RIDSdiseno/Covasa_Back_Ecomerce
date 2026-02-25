@@ -35,6 +35,14 @@ import { buscarClientePorUsuarioId, buscarUsuarioPorId } from "../usuarios/usuar
 
 type ItemSolicitud = { productoId: string; cantidad: number; observacion?: string | null };
 
+async function obtenerClienteIdPorUsuario(usuarioId: string): Promise<string | null> {
+  const cliente = await prisma.ecommerceCliente.findUnique({
+    where: { usuarioId },
+    select: { id: true },
+  });
+  return cliente?.id ?? null;
+}
+
 type CotizacionBasePayload = {
   ecommerceClienteId?: string;
   contacto: {
@@ -157,7 +165,10 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
       throw new ErrorApi("Producto no encontrado", 404, { id: item.productoId });
     }
 
-    const precioNeto = producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral;
+    // Prioridad: precioWeb > precioConDescto > precioGeneral
+    const precioNeto = producto.precioWeb > 0
+      ? producto.precioWeb
+      : (producto.precioConDescto > 0 ? producto.precioConDescto : producto.precioGeneral);
     const subtotal = precioNeto * item.cantidad;
     const ivaMonto = Math.round((subtotal * ivaPct) / 100);
     const total = subtotal + ivaMonto;
@@ -193,6 +204,8 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
     comunaRegion: payload.extra?.comunaRegion,
     detalleAdicional: payload.extra?.detalleAdicional,
     ubicacion: payload.extra?.ubicacion,
+    region: payload.extra?.region,
+    comuna: payload.extra?.comuna,
   });
 
   // EcommerceCotizacion: trazabilidad ecommerce (front/checkout) + referencia de items/snapshots.
@@ -274,14 +287,20 @@ export const obtenerCotizacionServicio = async (id: string) => {
   return cotizacion;
 };
 
-// Lista cotizaciones ecommerce con paginacion y filtros.
+// Lista cotizaciones ecommerce del usuario autenticado, con paginacion y filtros.
 export const listarCotizacionesServicio = async (params: {
+  usuarioId: string;
   status?: string;
   q?: string;
   from?: string;
   to?: string;
   page?: number;
 }) => {
+  const ecommerceClienteId = await obtenerClienteIdPorUsuario(params.usuarioId);
+  if (!ecommerceClienteId) {
+    return { items: [], total: 0, page: 1, pageSize: PAGE_SIZE, totalPages: 0 };
+  }
+
   const status = (params.status ?? "").trim().toUpperCase();
   const estadoEcommerce = status && Object.values(EcommerceEstadoCotizacion).includes(status as EcommerceEstadoCotizacion)
     ? (status as EcommerceEstadoCotizacion)
@@ -305,7 +324,9 @@ export const listarCotizacionesServicio = async (params: {
   const page = params.page ?? 1;
   const skip = (page - 1) * PAGE_SIZE;
 
-  const filtros: Prisma.EcommerceCotizacionWhereInput[] = [];
+  const filtros: Prisma.EcommerceCotizacionWhereInput[] = [
+    { ecommerceClienteId },
+  ];
 
   if (estadoEcommerce) {
     filtros.push({ estado: estadoEcommerce });
@@ -331,35 +352,46 @@ export const listarCotizacionesServicio = async (params: {
     });
   }
 
-  const where = filtros.length > 0 ? { AND: filtros } : {};
+  const where: Prisma.EcommerceCotizacionWhereInput = { AND: filtros };
 
-  const items = await prisma.ecommerceCotizacion.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      codigo: true,
-      createdAt: true,
-      nombreContacto: true,
-      email: true,
-      telefono: true,
-      estado: true,
-      total: true,
-      _count: { select: { items: true } },
-    },
-  });
+  const [rows, total] = await Promise.all([
+    prisma.ecommerceCotizacion.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: PAGE_SIZE,
+      select: {
+        id: true,
+        codigo: true,
+        createdAt: true,
+        nombreContacto: true,
+        email: true,
+        telefono: true,
+        estado: true,
+        total: true,
+        _count: { select: { items: true } },
+      },
+    }),
+    prisma.ecommerceCotizacion.count({ where }),
+  ]);
 
-  return items.map((item) => ({
-    id: item.id,
-    codigo: item.codigo,
-    createdAt: item.createdAt,
-    nombreContacto: item.nombreContacto,
-    email: item.email ?? null,
-    telefono: item.telefono ?? null,
-    estado: item.estado,
-    total: item.total,
-    itemsCount: item._count.items,
-  }));
+  return {
+    items: rows.map((item) => ({
+      id: item.id,
+      codigo: item.codigo,
+      createdAt: item.createdAt,
+      nombreContacto: item.nombreContacto,
+      email: item.email ?? null,
+      telefono: item.telefono ?? null,
+      estado: item.estado,
+      total: item.total,
+      itemsCount: item._count.items,
+    })),
+    total,
+    page,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.ceil(total / PAGE_SIZE),
+  };
 };
 
 // Convierte una cotizacion a carrito ACTIVO usando snapshots de la cotizacion.
