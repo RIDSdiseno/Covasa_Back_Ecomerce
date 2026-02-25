@@ -58,16 +58,17 @@ model Cliente {
 /// * PROVEEDORES
 /// * =========================
 model Proveedor {
-  id        String            @id @default(uuid())
-  nombre    String            @unique
-  rut       String?
-  email     String?
-  telefono  String?
-  contacto  String?
-  direccion String?
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-  precios   PrecioProveedor[]
+  id            String            @id @default(uuid())
+  nombre        String            @unique
+  rut           String?
+  email         String?
+  telefono      String?
+  contacto      String?
+  direccion     String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  ordenesCompra OrdenCompra[]
+  precios       PrecioProveedor[]
 }
 
 /// * =========================
@@ -92,39 +93,39 @@ model Categoria {
 /// * PRODUCTOS
 /// * =========================
 model Producto {
-  id                   String                    @id @default(uuid())
-  sku                  String?                   @unique
-  nombre               String
-  unidadMedida         String                    @default("unidad")
-  fotoUrl              String?
-  precioConDescto      Int                       @default(0)
-  precioGeneral        Int                       @default(0)
-  precioWeb            Int                       @default(0)
-  createdAt            DateTime                  @default(now())
-  updatedAt            DateTime                  @updatedAt
-  tipo                 ProductoTipo              @default(Producto)
-  fotoPublicId         String?
-  skuNumero            Int                       @unique @default(autoincrement())
-  categoriaId          String?
-  descripcionCorta     String?
-  descripcionTecnica   String?
-  noControlaStock      Boolean                   @default(false)
-  precioPorVariante    Boolean                   @default(false)
-  tieneVariantes       Boolean                   @default(false)
-  visibleEcommerce     Boolean                   @default(false)
-  activo               Boolean                   @default(true)
-  unidadVenta          String?
-  deletedAt            DateTime?
-  minQuantity          Int                       @default(0)
-  inventarios          Inventario?
-  preciosProveedor     PrecioProveedor[]
-  categoria            Categoria?                @relation(fields: [categoriaId], references: [id])
-  auditoria            ProductoAuditoria[]
-  imagenes             ProductoImagen[]
-  variantes            ProductoVariante[]
-  carritoItems         EcommerceCarritoItem[]
-  cotizacionItems      EcommerceCotizacionItem[]
-  pedidoItems          EcommercePedidoItem[]
+  id                 String                    @id @default(uuid())
+  sku                String?                   @unique
+  nombre             String
+  unidadMedida       String                    @default("unidad")
+  fotoUrl            String?
+  precioConDescto    Int                       @default(0)
+  precioGeneral      Int                       @default(0)
+  precioWeb          Int                       @default(0)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  tipo               ProductoTipo              @default(Producto)
+  fotoPublicId       String?
+  skuNumero          Int                       @unique @default(autoincrement())
+  categoriaId        String?
+  descripcionCorta   String?
+  descripcionTecnica String?
+  noControlaStock    Boolean                   @default(false)
+  precioPorVariante  Boolean                   @default(false)
+  tieneVariantes     Boolean                   @default(false)
+  visibleEcommerce   Boolean                   @default(false)
+  activo             Boolean                   @default(true)
+  unidadVenta        String?
+  deletedAt          DateTime?
+  minQuantity        Int                       @default(0)
+  inventarios        Inventario?
+  preciosProveedor   PrecioProveedor[]
+  categoria          Categoria?                @relation(fields: [categoriaId], references: [id])
+  auditoria          ProductoAuditoria[]
+  imagenes           ProductoImagen[]
+  variantes          ProductoVariante[]
+  carritoItems       EcommerceCarritoItem[]
+  cotizacionItems    EcommerceCotizacionItem[]
+  pedidoItems        EcommercePedidoItem[]
 
   @@index([nombre])
   @@index([tipo])
@@ -350,7 +351,7 @@ model ImportFila {
 /// * CRM COTIZACIONES (LEGACY)
 /// * =========================
 model CrmCotizacion {
-  id                       String                @id @default(uuid())
+  id                       String               @id @default(uuid())
   clienteId                String?
   clienteNombreSnapshot    String
   clienteRutSnapshot       String?
@@ -362,11 +363,11 @@ model CrmCotizacion {
   subtotalNeto             Int
   iva                      Int
   total                    Int
-  estado                   CrmEstadoCotizacion   @default(NUEVA)
+  estado                   CrmEstadoCotizacion  @default(NUEVA)
   tipoCierre               CrmTipoCierre?
   vendedorId               String?
-  createdAt                DateTime              @default(now())
-  updatedAt                DateTime              @updatedAt
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
   origenCliente            OrigenCliente?
   clienteDireccionSnapshot String?
   ecommerceCotizacion      EcommerceCotizacion?
@@ -504,6 +505,7 @@ model EcommerceCotizacion {
   fleteTarifa        FleteTarifa?              @relation(fields: [fleteTarifaId], references: [id])
   vendedor           Trabajador?               @relation("TrabajadorCotizaciones", fields: [vendedorId], references: [id])
   items              EcommerceCotizacionItem[]
+  notasVenta         NotaVenta[]
 
   @@index([clienteId], map: "ecommerce_cotizacion_clienteId_legacy_idx")
   @@index([ecommerceClienteId])
@@ -603,6 +605,7 @@ model EcommercePago {
   gatewayPayloadJson Json?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+  notasVenta         NotaVenta[]
   pedido             EcommercePedido     @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 
   @@index([estado])
@@ -612,25 +615,35 @@ model EcommercePago {
 
 /// Tabla de integracion para sincronizar pagos del ecommerce
 model IntegrationEcommercePago {
-  id                String    @id @default(uuid())
-  ecommercePagoId   String    @unique
-  pedidoId          String?
-  pedidoCodigo      String?
-  pedidoCorrelativo Int?
-  crmCotizacionId   String?
-  vendedorId        String?
-  metodo            String?
-  estado            String?
-  monto             Int?
-  referencia        String?
-  pagoCreatedAt     DateTime?
-  pagoUpdatedAt     DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                    String                 @id @default(uuid())
+  ecommercePagoId       String                 @unique
+  pedidoId              String?
+  pedidoCodigo          String?
+  pedidoCorrelativo     Int?
+  crmCotizacionId       String?
+  vendedorId            String?
+  metodo                String?
+  estado                String?
+  monto                 Int?
+  referencia            String?
+  rutAsociado           String?
+  moneda                String                 @default("CLP")
+  externalTransactionId String?
+  metodoPago            EcommerceMetodoPago?
+  estadoPago            IntegrationPagoEstado?
+  fechaPago             DateTime?
+  pagoCreatedAt         DateTime?
+  pagoUpdatedAt         DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 
   @@index([ecommercePagoId])
   @@index([pedidoId])
   @@index([crmCotizacionId])
+  @@index([rutAsociado])
+  @@index([estadoPago])
+  @@index([fechaPago])
+  @@index([externalTransactionId])
 }
 
 /// =========================
@@ -660,6 +673,7 @@ model EcommercePedido {
   crmCotizacionId    String?
   direccion          EcommerceDireccion?   @relation("PedidoDireccion")
   pagos              EcommercePago[]
+  notasVenta         NotaVenta[]
   crmCotizacion      CrmCotizacion?        @relation(fields: [crmCotizacionId], references: [id])
   ecommerceCliente   EcommerceCliente?     @relation(fields: [ecommerceClienteId], references: [id])
   items              EcommercePedidoItem[]
@@ -688,6 +702,92 @@ model EcommercePedidoItem {
   @@index([pedidoId])
   @@index([productoId])
   @@map("ecommerce_pedido_item")
+}
+
+model OrdenCompra {
+  id            String            @id @default(uuid())
+  correlativo   Int               @default(autoincrement())
+  codigo        String            @unique
+  proveedorId   String
+  numero        String
+  fechaEmision  DateTime
+  moneda        String            @default("CLP")
+  subtotalNeto  Int               @default(0)
+  iva           Int               @default(0)
+  total         Int
+  estado        OrdenCompraEstado @default(BORRADOR)
+  emitida       Boolean           @default(false)
+  emitidaAt     DateTime?
+  observaciones String?
+  createdBy     String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  proveedor     Proveedor         @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
+  notasVenta    NotaVenta[]
+
+  @@unique([proveedorId, numero, fechaEmision, total])
+  @@index([proveedorId, fechaEmision])
+  @@index([estado, emitida, createdAt])
+}
+
+model NotaVenta {
+  id                      String               @id @default(uuid())
+  correlativo             Int                  @default(autoincrement())
+  codigo                  String               @unique
+  estado                  NotaVentaEstado      @default(BORRADOR)
+  origen                  NotaVentaOrigen      @default(COTIZACION)
+  moneda                  String               @default("CLP")
+  rutCliente              String?
+  clienteNombreSnapshot   String
+  clienteEmailSnapshot    String?
+  clienteTelefonoSnapshot String?
+  subtotalNeto            Int
+  iva                     Int
+  total                   Int
+  observaciones           String?
+  createdBy               String?
+  emittedAt               DateTime?
+  paidAt                  DateTime?
+  ecommerceCotizacionId   String?              @unique
+  ecommercePedidoId       String?              @unique
+  ecommercePagoId         String?              @unique
+  ordenCompraId           String?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  ecommerceCotizacion     EcommerceCotizacion? @relation(fields: [ecommerceCotizacionId], references: [id], onDelete: SetNull)
+  ecommercePedido         EcommercePedido?     @relation(fields: [ecommercePedidoId], references: [id], onDelete: SetNull)
+  ecommercePago           EcommercePago?       @relation(fields: [ecommercePagoId], references: [id], onDelete: SetNull)
+  ordenCompra             OrdenCompra?         @relation(fields: [ordenCompraId], references: [id], onDelete: SetNull)
+
+  @@index([estado, createdAt])
+  @@index([rutCliente])
+}
+
+model CarteraEmpresa {
+  id                String               @id @default(uuid())
+  tipo              CarteraTipo
+  estado            CarteraEstado        @default(PENDIENTE)
+  contraparteNombre String
+  contraparteRut    String?
+  formaPago         EcommerceMetodoPago?
+  referenciaExterna String?
+  descripcion       String?
+  moneda            String               @default("CLP")
+  montoTotal        Int
+  saldoPendiente    Int
+  fechaDocumento    DateTime
+  fechaVencimiento  DateTime?
+  cuotasTotal       Int                  @default(1)
+  cuotaActual       Int                  @default(1)
+  proximaCuotaAt    DateTime?
+  observaciones     String?
+  createdBy         String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([estado, fechaVencimiento])
+  @@index([tipo, createdAt])
+  @@index([contraparteRut])
 }
 
 /// =========================
@@ -758,6 +858,7 @@ enum EcommerceEstadoPago {
   PENDIENTE
   CONFIRMADO
   RECHAZADO
+  REEMBOLSADO
 }
 
 enum EcommerceEstadoPedido {
@@ -814,4 +915,44 @@ enum AuthProvider {
   LOCAL
   MICROSOFT
   GOOGLE
+}
+
+enum IntegrationPagoEstado {
+  PAGADO
+  PENDIENTE
+  RECHAZADO
+  REEMBOLSADO
+}
+
+enum NotaVentaEstado {
+  BORRADOR
+  EMITIDA
+  PAGADA
+  ANULADA
+}
+
+enum NotaVentaOrigen {
+  COTIZACION
+  PEDIDO
+  PAGO
+  MANUAL
+}
+
+enum OrdenCompraEstado {
+  BORRADOR
+  EMITIDA
+  ANULADA
+}
+
+enum CarteraTipo {
+  EGRESO
+  CREDITO_SOLICITADO
+}
+
+enum CarteraEstado {
+  PENDIENTE
+  PAGADO
+  VENCIDO
+  REPROGRAMADO
+  CANCELADO
 }

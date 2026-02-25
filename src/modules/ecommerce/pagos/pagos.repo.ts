@@ -273,6 +273,7 @@ export const listarPagosParaIntegracion = (
       estado: true,
       monto: true,
       referencia: true,
+      gatewayPayloadJson: true,
       createdAt: true,
       updatedAt: true,
       pedido: {
@@ -283,6 +284,7 @@ export const listarPagosParaIntegracion = (
           ecommerceClienteId: true,
           clienteId: true,
           despachoNombre: true,
+          despachoRut: true,
           despachoTelefono: true,
           despachoEmail: true,
           despachoDireccion: true,
@@ -299,6 +301,11 @@ export const listarPagosParaIntegracion = (
           crmCotizacion: {
             select: {
               vendedorId: true,
+            },
+          },
+          ecommerceCliente: {
+            select: {
+              rut: true,
             },
           },
         },
