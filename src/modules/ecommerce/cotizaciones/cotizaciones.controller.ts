@@ -100,13 +100,8 @@ export const crearCotizacion = manejarAsync(async (req: Request, res: Response) 
     extra: {
       tipoObra: payload.contacto.tipoObra ?? undefined,
       ubicacion: payload.contacto.ubicacion ?? undefined,
-<<<<<<< HEAD
       region: payload.contacto.region ?? undefined,
       comuna: payload.contacto.comuna ?? undefined,
-=======
-      region: payload.contacto.region,
-      comuna: payload.contacto.comuna,
->>>>>>> 2a33f58cd41697deea99acbc114a27a1fb18a062
     },
     items: payload.items,
   });

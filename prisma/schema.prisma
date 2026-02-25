@@ -874,6 +874,7 @@ enum EcommerceMetodoPago {
   TRANSBANK
   APPLE_PAY
   STRIPE
+  KLAP
   TRANSFERENCIA
   OTRO
   APPLEPAY_DEV

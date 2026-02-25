@@ -204,8 +204,6 @@ export const crearCotizacionServicio = async (payload: CotizacionBasePayload) =>
     comunaRegion: payload.extra?.comunaRegion,
     detalleAdicional: payload.extra?.detalleAdicional,
     ubicacion: payload.extra?.ubicacion,
-    region: payload.extra?.region,
-    comuna: payload.extra?.comuna,
   });
 
   // EcommerceCotizacion: trazabilidad ecommerce (front/checkout) + referencia de items/snapshots.

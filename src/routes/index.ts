@@ -5,7 +5,7 @@ import dpaRouter from "./dpa.routes";
 import chileDpaRouter from "./chileDpa.routes";
 import ecommerceRouter from "../modules/ecommerce";
 import crmRouter from "../modules/crm";
-import dpaRouter from "../modules/dpa/dpa.routes";
+import dpaModuleRouter from "../modules/dpa/dpa.routes";
 
 const router = Router();
 
@@ -24,7 +24,7 @@ router.use("/dpa", dpaRouter);
 router.use("/chile", chileDpaRouter);
 // DEPRECATED: rutas legacy de compatibilidad.
 router.use(legacyRouter);
-router.use("/dpa", dpaRouter);
+router.use("/dpa", dpaModuleRouter);
 router.use("/ecommerce", ecommerceRouter);
 router.use("/crm", crmRouter);
 
