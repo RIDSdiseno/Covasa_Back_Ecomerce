@@ -23,7 +23,7 @@ import {
   obtenerEstadoStripe,
   recibirStripeWebhook,
 } from "../pagos/stripe.controller";
-import { crearKlapPago, recibirKlapWebhook } from "../pagos/klap.controller";
+import { crearKlapPago, recibirKlapMockWebhook, recibirKlapWebhook } from "../pagos/klap.controller";
 import { requireApplePayDevEnabled } from "../../../middleware/requireApplePayDevEnabled";
 import { optionalAuth } from "../../../middleware/optionalAuth";
 
@@ -46,6 +46,7 @@ router.post("/mercadopago", crearMercadoPago);
 router.post("/transbank", crearTransbankPago);
 router.post("/klap", requireKlapEnabled, crearKlapPago);
 router.post("/klap/webhook", requireKlapEnabled, recibirKlapWebhook);
+router.post("/klap/mock-webhook", requireKlapEnabled, recibirKlapMockWebhook);
 router.post("/applepay-dev/create-intent", requireApplePayDevEnabled, crearApplePayDevIntent);
 router.post("/stripe/intent", crearStripeIntent);
 router.post("/stripe/create-intent", crearStripeCreateIntent);

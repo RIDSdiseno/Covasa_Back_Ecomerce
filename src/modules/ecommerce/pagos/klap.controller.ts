@@ -1,7 +1,11 @@
 import { Request, Response } from "express";
 import { manejarAsync } from "../../../lib/manejarAsync";
-import { klapCrearSchema, klapWebhookSchema } from "./klap.schema";
-import { crearKlapPagoServicio, procesarKlapWebhookServicio } from "./klap.service";
+import { klapCrearSchema, klapMockWebhookSchema, klapWebhookSchema } from "./klap.schema";
+import {
+  crearKlapPagoServicio,
+  procesarKlapMockWebhookServicio,
+  procesarKlapWebhookServicio,
+} from "./klap.service";
 
 // POST /api/ecommerce/payments/klap
 // Input: { pedidoId, frontUrl? }. Output: { pagoId, pedidoId, orderId, redirectUrl? }.
@@ -12,7 +16,9 @@ export const crearKlapPago = manejarAsync(async (req: Request, res: Response) =>
   res.status(200).json({
     ok: true,
     data: resultado,
-    message: "Orden KLAP creada",
+    redirectUrl: resultado.redirectUrl,
+    mock: Boolean(resultado.mock),
+    message: resultado.mock ? "Orden KLAP mock creada" : "Orden KLAP creada",
   });
 });
 
@@ -29,4 +35,17 @@ export const recibirKlapWebhook = manejarAsync(async (req: Request, res: Respons
   });
 
   res.status(200).json({ status: "ok" });
+});
+
+// POST /api/ecommerce/payments/klap/mock-webhook
+// Solo para sandbox/mock: actualiza pago KLAP simulando confirmacion/rechazo.
+export const recibirKlapMockWebhook = manejarAsync(async (req: Request, res: Response) => {
+  const payload = klapMockWebhookSchema.parse(req.body);
+  const resultado = await procesarKlapMockWebhookServicio(payload);
+
+  res.status(200).json({
+    ok: true,
+    referencia: resultado.referencia,
+    estadoFinal: resultado.estadoFinal,
+  });
 });

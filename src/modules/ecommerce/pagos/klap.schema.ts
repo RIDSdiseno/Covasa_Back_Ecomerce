@@ -38,5 +38,11 @@ export const klapWebhookSchema = z
     }
   });
 
+export const klapMockWebhookSchema = z.object({
+  referencia: z.string().min(1),
+  estado: z.enum(["CONFIRMADO", "RECHAZADO"]),
+});
+
 export type KlapCrearInput = z.infer<typeof klapCrearSchema>;
 export type KlapWebhookInput = z.infer<typeof klapWebhookSchema>;
+export type KlapMockWebhookInput = z.infer<typeof klapMockWebhookSchema>;

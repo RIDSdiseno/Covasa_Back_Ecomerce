@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "crypto";
+import { createHash, randomUUID, timingSafeEqual } from "crypto";
 import {
   EcommerceEstadoPago,
   EcommerceEstadoPedido,
@@ -19,13 +19,15 @@ import {
   listarPagosPorMetodo,
 } from "./pagos.repo";
 import { notificarPagoConfirmadoCRM } from "./crm-notificacion";
-import type { KlapCrearInput, KlapWebhookInput } from "./klap.schema";
+import type { KlapCrearInput, KlapMockWebhookInput, KlapWebhookInput } from "./klap.schema";
 
 type KlapConfig = {
   env: "sandbox" | "prod";
-  apiKey: string;
-  ordersUrl: string;
-  publicBaseUrl: string;
+  mockEnabled: boolean;
+  apiKey?: string;
+  ordersUrl?: string;
+  publicBaseUrl?: string;
+  frontendBaseUrl?: string;
   webhookPath: string;
   returnPath: string;
 };
@@ -36,6 +38,7 @@ type KlapCreateResult = {
   orderId: string;
   redirectUrl?: string;
   raw: unknown;
+  mock?: boolean;
 };
 
 type JsonRecord = Record<string, unknown>;
@@ -44,6 +47,39 @@ const normalizarFlag = (value?: string) => normalizarTexto(value).toLowerCase();
 const klapEnabled = () => {
   const flag = normalizarFlag(process.env.KLAP_ENABLED);
   return flag === "true" || flag === "1" || flag === "yes";
+};
+
+const parseBooleanEnv = (key: string, defaultValue = false) => {
+  const raw = normalizarFlag(process.env[key]);
+  if (!raw) {
+    return defaultValue;
+  }
+  if (["true", "1", "yes"].includes(raw)) {
+    return true;
+  }
+  if (["false", "0", "no"].includes(raw)) {
+    return false;
+  }
+  throw new ErrorApi(`${key} invalido`, 500, { value: process.env[key] });
+};
+
+const parseKlapEnv = () => {
+  const envRaw = normalizarFlag(process.env.KLAP_ENV || "sandbox");
+  if (!["sandbox", "prod", "production"].includes(envRaw)) {
+    throw new ErrorApi("KLAP_ENV invalido", 500, { value: envRaw });
+  }
+  return envRaw === "production" ? "prod" : (envRaw as "sandbox" | "prod");
+};
+
+const isPlaceholderApiKey = (apiKeyRaw?: string) => {
+  const value = normalizarTexto(apiKeyRaw);
+  return !value || value.toUpperCase().includes("REEMPLAZAR");
+};
+
+export const isKlapMockEnabled = () => {
+  const forced = parseBooleanEnv("KLAP_MOCK", false);
+  const apiKey = normalizarTexto(process.env.KLAP_API_KEY);
+  return forced || isPlaceholderApiKey(apiKey);
 };
 
 const requireEnv = (key: string) => {
@@ -63,6 +99,19 @@ const normalizarBaseUrl = (raw: string, envKey: string) => {
   }
 };
 
+const normalizarBaseUrlOpcional = (raw: string | undefined, envKey: string) => {
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    const parsed = new URL(raw);
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    logger.warn("klap_env_url_invalida", { envKey, value: raw });
+    return undefined;
+  }
+};
+
 const construirUrl = (base: string, pathOrUrl: string) => {
   if (/^https?:\/\//i.test(pathOrUrl)) {
     return pathOrUrl;
@@ -77,23 +126,32 @@ const obtenerConfigKlap = (): KlapConfig => {
     throw new ErrorApi("Not found", 404);
   }
 
-  const envRaw = normalizarFlag(process.env.KLAP_ENV || "sandbox");
-  if (!["sandbox", "prod", "production"].includes(envRaw)) {
-    throw new ErrorApi("KLAP_ENV invalido", 500, { value: envRaw });
-  }
-
-  const env = envRaw === "production" ? "prod" : (envRaw as "sandbox" | "prod");
-  const apiKey = requireEnv("KLAP_API_KEY");
-  const ordersUrl = normalizarBaseUrl(requireEnv("KLAP_ORDERS_URL"), "KLAP_ORDERS_URL");
-  const publicBaseUrl = normalizarBaseUrl(requireEnv("PUBLIC_BASE_URL"), "PUBLIC_BASE_URL");
+  const env = parseKlapEnv();
+  const mockEnabled = isKlapMockEnabled();
+  const apiKeyRaw = normalizarTexto(process.env.KLAP_API_KEY);
   const webhookPath = normalizarTexto(process.env.KLAP_WEBHOOK_PATH) || "/api/ecommerce/payments/klap/webhook";
   const returnPath = normalizarTexto(process.env.KLAP_RETURN_URL) || "/pago/klap";
+  const frontBaseRaw =
+    normalizarTexto(process.env.PUBLIC_FRONTEND_BASE_URL) ||
+    normalizarTexto(process.env.FRONTEND_BASE_URL) ||
+    "";
+
+  const apiKey = mockEnabled ? apiKeyRaw || undefined : requireEnv("KLAP_API_KEY");
+  const ordersUrl = mockEnabled
+    ? normalizarBaseUrlOpcional(normalizarTexto(process.env.KLAP_ORDERS_URL) || undefined, "KLAP_ORDERS_URL")
+    : normalizarBaseUrl(requireEnv("KLAP_ORDERS_URL"), "KLAP_ORDERS_URL");
+  const publicBaseUrl = mockEnabled
+    ? normalizarBaseUrlOpcional(normalizarTexto(process.env.PUBLIC_BASE_URL) || undefined, "PUBLIC_BASE_URL")
+    : normalizarBaseUrl(requireEnv("PUBLIC_BASE_URL"), "PUBLIC_BASE_URL");
+  const frontendBaseUrl = normalizarBaseUrlOpcional(frontBaseRaw || publicBaseUrl, "FRONTEND_BASE_URL");
 
   return {
     env,
+    mockEnabled,
     apiKey,
     ordersUrl,
     publicBaseUrl,
+    frontendBaseUrl,
     webhookPath,
     returnPath,
   };
@@ -277,7 +335,7 @@ const resolverEstadoFinal = (actual: EcommerceEstadoPago, mapeado: EcommerceEsta
   return mapeado;
 };
 
-const obtenerBaseFront = (frontUrl: string | undefined, fallbackBase: string) => {
+const obtenerBaseFront = (frontUrl: string | undefined, fallbackBase?: string) => {
   if (!frontUrl) {
     return fallbackBase;
   }
@@ -298,6 +356,50 @@ const resumirError = (error: unknown) => {
     return { name: error.name, message: error.message };
   }
   return { message: String(error) };
+};
+
+const construirReturnTarget = (baseUrl: string | undefined, returnPath: string) => {
+  const path = normalizarTexto(returnPath) || "/pago/klap";
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+  if (!baseUrl) {
+    return path.startsWith("/") ? path : `/${path}`;
+  }
+  return construirUrl(baseUrl, path);
+};
+
+const agregarParametrosRedirect = (
+  target: string,
+  params: Record<string, string | undefined>,
+  forceRelative = false
+) => {
+  if (!forceRelative && /^https?:\/\//i.test(target)) {
+    const url = new URL(target);
+    for (const [key, value] of Object.entries(params)) {
+      if (value) {
+        url.searchParams.set(key, value);
+      }
+    }
+    return url.toString();
+  }
+
+  const [pathPart, queryPart = ""] = target.split("?");
+  const path = pathPart.startsWith("/") ? pathPart : `/${pathPart}`;
+  const query = new URLSearchParams(queryPart);
+  for (const [key, value] of Object.entries(params)) {
+    if (value) {
+      query.set(key, value);
+    }
+  }
+  const encoded = query.toString();
+  return encoded ? `${path}?${encoded}` : path;
+};
+
+const generarReferenciaMock = (pedidoId: string) => {
+  const timestamp = Date.now();
+  const token = randomUUID().replace(/-/g, "").slice(0, 10);
+  return `klap_mock_${pedidoId}_${timestamp}_${token}`;
 };
 
 const buscarPagoKlapPorReferenceId = async (referenceId: string) => {
@@ -330,6 +432,87 @@ export const crearKlapPagoServicio = async (params: KlapCrearInput): Promise<Kla
 
   // Idempotencia: si ya existe un pago KLAP pendiente para el mismo pedido, se reutiliza.
   const pagoPendiente = await buscarPagoPendientePorPedidoMetodo(pedido.id, EcommerceMetodoPago.KLAP);
+  if (config.mockEnabled) {
+    const referenciaExistente = normalizarTexto(pagoPendiente?.referencia || undefined);
+    const referencia = referenciaExistente || generarReferenciaMock(pedido.id);
+    const createdAt = new Date().toISOString();
+    const itemsCount = await prisma.ecommercePedidoItem.count({
+      where: { pedidoId: pedido.id },
+    });
+    const mockPayload = {
+      mock: true,
+      createdAt,
+      pedidoId: pedido.id,
+      total: pedido.total,
+      itemsCount,
+    };
+
+    const frontBase = obtenerBaseFront(
+      normalizarTexto(params.frontUrl) || undefined,
+      config.frontendBaseUrl || config.publicBaseUrl
+    );
+    const returnTarget = construirReturnTarget(
+      frontBase || config.frontendBaseUrl || config.publicBaseUrl,
+      config.returnPath
+    );
+    const redirectUrl = agregarParametrosRedirect(returnTarget, {
+      ref: referencia,
+      mock: "1",
+    });
+
+    let gatewayPayload = mergeGatewayPayloadKlap(pagoPendiente?.gatewayPayloadJson, {
+      env: config.env,
+      mock: true,
+      referenceId: referencia,
+      frontUrl: normalizarTexto(params.frontUrl) || undefined,
+      returnUrl: returnTarget,
+      redirectUrl,
+      mockOrder: mockPayload,
+    });
+
+    let pagoId = pagoPendiente?.id;
+    if (!pagoId) {
+      const pago = await crearPago({
+        pedido: { connect: { id: pedido.id } },
+        metodo: EcommerceMetodoPago.KLAP,
+        estado: EcommerceEstadoPago.PENDIENTE,
+        monto: pedido.total,
+        referencia,
+        gatewayPayloadJson: toInputJson(gatewayPayload),
+      });
+      pagoId = pago.id;
+    } else {
+      gatewayPayload = mergeGatewayPayloadKlap(gatewayPayload, {
+        reusedPendingPagoId: pagoId,
+      });
+
+      await actualizarPagoDatos(pagoId, {
+        referencia,
+        gatewayPayloadJson: toInputJson(gatewayPayload),
+      });
+    }
+
+    if (!pagoId) {
+      throw new ErrorApi("No fue posible crear pago KLAP mock", 500);
+    }
+
+    logger.info("klap_mock_order_created", {
+      event: "klap_mock_order_created",
+      pedidoId: pedido.id,
+      referencia,
+      total: pedido.total,
+    });
+
+    return {
+      pagoId,
+      pedidoId: pedido.id,
+      orderId: referencia,
+      redirectUrl,
+      raw: mockPayload,
+      mock: true,
+    };
+  }
+
   if (pagoPendiente?.referencia) {
     return {
       pagoId: pagoPendiente.id,
@@ -337,11 +520,24 @@ export const crearKlapPagoServicio = async (params: KlapCrearInput): Promise<Kla
       orderId: pagoPendiente.referencia,
       redirectUrl: extraerRedirectUrl(pagoPendiente.gatewayPayloadJson) || undefined,
       raw: extraerCreateResponseDesdeGateway(pagoPendiente.gatewayPayloadJson) ?? pagoPendiente.gatewayPayloadJson,
+      mock: false,
     };
   }
 
-  const frontBase = obtenerBaseFront(normalizarTexto(params.frontUrl) || undefined, config.publicBaseUrl);
-  const webhookUrl = construirUrl(config.publicBaseUrl, config.webhookPath);
+  if (!config.publicBaseUrl || !config.ordersUrl || !config.apiKey) {
+    throw new ErrorApi("Configuracion KLAP incompleta", 500, {
+      hasApiKey: Boolean(config.apiKey),
+      hasOrdersUrl: Boolean(config.ordersUrl),
+      hasPublicBaseUrl: Boolean(config.publicBaseUrl),
+    });
+  }
+
+  const publicBaseUrl = config.publicBaseUrl;
+  const ordersUrl = config.ordersUrl;
+  const apiKey = config.apiKey;
+  const frontBase =
+    obtenerBaseFront(normalizarTexto(params.frontUrl) || undefined, publicBaseUrl) || publicBaseUrl;
+  const webhookUrl = construirUrl(publicBaseUrl, config.webhookPath);
   const returnUrl = construirUrl(frontBase, config.returnPath);
 
   let pagoId = pagoPendiente?.id;
@@ -402,11 +598,11 @@ export const crearKlapPagoServicio = async (params: KlapCrearInput): Promise<Kla
 
   let rawResponse: unknown;
   try {
-    const response = await fetch(config.ordersUrl, {
+    const response = await fetch(ordersUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Apikey: config.apiKey,
+        Apikey: apiKey,
       },
       body: JSON.stringify(createRequestPayload),
     });
@@ -472,21 +668,25 @@ export const crearKlapPagoServicio = async (params: KlapCrearInput): Promise<Kla
     orderId,
     redirectUrl,
     raw: rawResponse,
+    mock: false,
   };
 };
 
-export const procesarKlapWebhookServicio = async (params: {
+const procesarKlapWebhookInterno = async (params: {
+  config: KlapConfig;
   payload: KlapWebhookInput;
   apikeyHeader?: string;
+  omitirValidacionFirma?: boolean;
 }) => {
-  const config = obtenerConfigKlap();
+  const config = params.config;
   const referenceId = normalizarTexto(params.payload.reference_id);
   const orderId = normalizarTexto(params.payload.order_id);
   const firmaRecibida = normalizarTexto(params.apikeyHeader);
-  const firmaEsperada = hashKlap(referenceId, orderId, config.apiKey);
+  const firmaEsperada = config.apiKey ? hashKlap(referenceId, orderId, config.apiKey) : "";
+  const omitirFirma = Boolean(params.omitirValidacionFirma);
 
   // Validacion de firma: sha256(reference_id + order_id + apiKey) con comparacion segura.
-  if (!validarFirmaKlap(firmaRecibida, firmaEsperada)) {
+  if (!omitirFirma && !validarFirmaKlap(firmaRecibida, firmaEsperada)) {
     throw new ErrorApi("Firma KLAP invalida", 401);
   }
 
@@ -502,8 +702,8 @@ export const procesarKlapWebhookServicio = async (params: {
   const estadoMapeado = mapearEstadoKlap(params.payload.status);
   const estadoFinal = resolverEstadoFinal(pago.estado, estadoMapeado);
   const payloadWebhook = appendKlapWebhookPayload(pago.gatewayPayloadJson, params.payload, {
-    recibida: firmaRecibida,
-    esperada: firmaEsperada,
+    recibida: firmaRecibida || (omitirFirma ? "mock" : ""),
+    esperada: firmaEsperada || (omitirFirma ? "mock" : ""),
     valida: true,
   });
 
@@ -547,5 +747,50 @@ export const procesarKlapWebhookServicio = async (params: {
     pagoId: pagoActualizado.id,
     pedidoId: pagoActualizado.pedidoId,
     estado: pagoActualizado.estado,
+  };
+};
+
+export const procesarKlapWebhookServicio = async (params: {
+  payload: KlapWebhookInput;
+  apikeyHeader?: string;
+}) => {
+  const config = obtenerConfigKlap();
+  return procesarKlapWebhookInterno({
+    config,
+    payload: params.payload,
+    apikeyHeader: params.apikeyHeader,
+  });
+};
+
+export const procesarKlapMockWebhookServicio = async (payload: KlapMockWebhookInput) => {
+  const config = obtenerConfigKlap();
+  if (!config.mockEnabled && config.env !== "sandbox") {
+    throw new ErrorApi("Klap mock webhook no habilitado", 403);
+  }
+
+  const referencia = normalizarTexto(payload.referencia);
+  const estadoSolicitado = payload.estado;
+  const webhookPayload: KlapWebhookInput = {
+    reference_id: referencia,
+    order_id: referencia,
+    status: estadoSolicitado === "CONFIRMADO" ? "CONFIRMED" : "REJECTED",
+  };
+
+  logger.info("klap_mock_webhook", {
+    event: "klap_mock_webhook",
+    referencia,
+    estado: estadoSolicitado,
+  });
+
+  const resultado = await procesarKlapWebhookInterno({
+    config,
+    payload: webhookPayload,
+    apikeyHeader: "mock",
+    omitirValidacionFirma: true,
+  });
+
+  return {
+    referencia,
+    estadoFinal: resultado.estado,
   };
 };
