@@ -282,12 +282,13 @@ export const obtenerPagoDetallePorUsuario = (
   });
 
 export const listarPagosParaIntegracion = (
-  params: { since?: Date; estado?: EcommerceEstadoPago; limit: number },
+  params: { since?: Date; estado?: EcommerceEstadoPago; metodo?: EcommerceMetodoPago; limit: number },
   tx?: DbClient
 ) =>
   db(tx).ecommercePago.findMany({
     where: {
       ...(params.estado ? { estado: params.estado } : {}),
+      ...(params.metodo ? { metodo: params.metodo } : {}),
       ...(params.since ? { updatedAt: { gte: params.since } } : {}),
     },
     orderBy: { updatedAt: "asc" },

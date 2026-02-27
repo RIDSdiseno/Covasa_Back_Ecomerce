@@ -4,6 +4,7 @@ import { ErrorApi } from "../../../lib/errores";
 import { manejarAsync } from "../../../lib/manejarAsync";
 import { normalizarTexto } from "../common/ecommerce.utils";
 import { pagoCrearSchema, pagoIdSchema, pagosIntegracionQuerySchema } from "./pagos.schema";
+import { parseMetodoPagoSoportado, parseMetodoPagoSoportadoOpcional } from "./paymentMethods";
 import {
   confirmarPagoServicio,
   crearPagoServicio,
@@ -66,7 +67,11 @@ const parsearFecha = (value?: string) => {
 // Input: { pedidoId, metodo, monto, referencia?, evidenciaUrl?, gatewayPayloadJson? }.
 export const crearPago = manejarAsync(async (req: Request, res: Response) => {
   const payload = pagoCrearSchema.parse(req.body);
-  const pago = await crearPagoServicio(payload);
+  const metodo = parseMetodoPagoSoportado(payload.metodo, "body");
+  const pago = await crearPagoServicio({
+    ...payload,
+    metodo,
+  });
 
   res.status(201).json({
     ok: true,
@@ -153,10 +158,12 @@ export const listarPagosIntegracion = manejarAsync(async (req: Request, res: Res
   const query = pagosIntegracionQuerySchema.parse(req.query);
   const since = parsearFecha(query.since);
   const estado = query.estado ?? EcommerceEstadoPago.CONFIRMADO;
+  const metodo = parseMetodoPagoSoportadoOpcional(query.metodo, "query");
 
   const pagos = await listarPagosIntegracionServicio({
     since,
     estado,
+    metodo,
     limit: query.limit,
   });
 

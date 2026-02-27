@@ -346,6 +346,7 @@ const formatDateCl = (value: Date | string | null | undefined) => {
 export const listarPagosIntegracionServicio = async (params: {
   since?: Date;
   estado?: EcommerceEstadoPago;
+  metodo?: EcommerceMetodoPago;
   limit: number;
 }) => {
   const pagos = await listarPagosParaIntegracion(params);

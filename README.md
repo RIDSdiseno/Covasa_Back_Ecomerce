@@ -72,55 +72,14 @@ export const fetchRegiones = async () => {
 - Variables requeridas: `DATABASE_URL`, `PORT`, `FRONTEND_ORIGIN`, `IVA_PCT`.
 - Recomendado: ejecutar `npm run prisma:migrate` en el deploy para crear tablas nuevas.
 
-## KLAP (Checkout Flex)
-- Variables backend requeridas:
-  - `KLAP_ENABLED=true|false`
-  - `KLAP_MOCK=true|false` (default `false`)
-  - `KLAP_ENV=sandbox|prod`
-  - `KLAP_API_KEY=...`
-  - `KLAP_ORDERS_URL=...`
-  - `PUBLIC_BASE_URL=https://...`
-  - `PUBLIC_FRONTEND_BASE_URL=https://...` (opcional, prioritaria para redirects)
-  - `FRONTEND_BASE_URL=https://...` (opcional)
-  - `KLAP_WEBHOOK_PATH=/api/ecommerce/payments/klap/webhook`
-  - `KLAP_RETURN_URL=/pago/klap` (opcional)
-- Flujo: crear pedido -> `POST /api/ecommerce/payments/klap` -> redireccionar a `redirectUrl` -> webhook KLAP -> pago confirmado/rechazado/reembolsado.
-- Modo mock: si `KLAP_MOCK=true` o `KLAP_API_KEY` esta vacia/placeholder (`REEMPLAZAR`), `POST /api/ecommerce/payments/klap` no llama KLAP externo y devuelve `redirectUrl` mock con `?ref=<referencia>&mock=1`.
-- Firma webhook: `sha256(reference_id + order_id + KLAP_API_KEY)` comparada contra header `apikey`.
-- Cuando `KLAP_ENABLED=false`, las rutas KLAP responden `404`.
-- Endpoint sandbox/mock: `POST /api/ecommerce/payments/klap/mock-webhook` con body `{ referencia, estado }`; responde `403` si `KLAP_MOCK=false` y `KLAP_ENV!=sandbox`.
-
-Ejemplos `curl`:
-
-```bash
-# A) Crear pago KLAP (mock activo)
-curl -X POST "https://<backend>/api/ecommerce/payments/klap" \
-  -H "Content-Type: application/json" \
-  -d '{ "pedidoId": "<uuid>" }'
-# -> { "ok": true, "data": { "redirectUrl": "/pago/klap?ref=klap_mock_xxx&mock=1", "mock": true, ... } }
-
-# B) Simular aprobacion
-curl -X POST "https://<backend>/api/ecommerce/payments/klap/mock-webhook" \
-  -H "Content-Type: application/json" \
-  -d '{ "referencia": "klap_mock_xxx", "estado": "CONFIRMADO" }'
-# -> { "ok": true, "referencia": "klap_mock_xxx", "estadoFinal": "CONFIRMADO" }
-
-# C) Simular rechazo
-curl -X POST "https://<backend>/api/ecommerce/payments/klap/mock-webhook" \
-  -H "Content-Type: application/json" \
-  -d '{ "referencia": "klap_mock_xxx", "estado": "RECHAZADO" }'
-# -> { "ok": true, "referencia": "klap_mock_xxx", "estadoFinal": "RECHAZADO" }
-```
-
-## Probar Webhook KLAP en desarrollo
-1) Exponer backend local:
-   - `ngrok http 3001` o `cloudflared tunnel --url http://localhost:3001`
-2) Configurar:
-   - `PUBLIC_BASE_URL=<url-publica-del-tunnel>`
-   - `KLAP_WEBHOOK_PATH=/api/ecommerce/payments/klap/webhook`
-3) Flujo de prueba:
-   - Crear pedido desde checkout.
-   - Iniciar pago KLAP.
-   - Verificar `EcommercePago` en `PENDIENTE`.
-   - Disparar webhook (o completar pago en sandbox) y validar cambio a `CONFIRMADO/RECHAZADO`.
-   - Confirmado: validar `EcommercePedido.estado = PAGADO`, aparición en `mis-pagos` y PDF.
+## Klap (Deprecated)
+- Klap ya no esta soportado en ecommerce.
+- Cualquier intento a:
+  - `POST /api/ecommerce/payments/klap`
+  - `POST /api/ecommerce/payments/klap/webhook`
+  - `POST /api/ecommerce/payments/klap/mock-webhook`
+  responde `410 Gone` con:
+  - `code: "KLAP_DEPRECATED"`
+  - `errorCode: "PAYMENT_METHOD_DEPRECATED"`
+  - `message: "Klap is no longer supported"`
+- Las variables `KLAP_*` se ignoran y no afectan el flujo de pagos.

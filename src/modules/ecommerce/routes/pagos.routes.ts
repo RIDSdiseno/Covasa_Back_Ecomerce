@@ -1,4 +1,4 @@
-import { NextFunction, Request, Response, Router } from "express";
+import { Request, Response, Router } from "express";
 import {
   confirmarPago,
   crearPago,
@@ -23,30 +23,61 @@ import {
   obtenerEstadoStripe,
   recibirStripeWebhook,
 } from "../pagos/stripe.controller";
-import { crearKlapPago, recibirKlapMockWebhook, recibirKlapWebhook } from "../pagos/klap.controller";
 import { requireApplePayDevEnabled } from "../../../middleware/requireApplePayDevEnabled";
 import { optionalAuth } from "../../../middleware/optionalAuth";
+import { logger } from "../../../lib/logger";
 
 const router = Router();
-const normalizarFlag = (value?: string) => (value ?? "").trim().toLowerCase();
-const klapHabilitado = () => {
-  const flag = normalizarFlag(process.env.KLAP_ENABLED);
-  return flag === "true" || flag === "1" || flag === "yes";
-};
-const requireKlapEnabled = (_req: Request, res: Response, next: NextFunction) => {
-  if (!klapHabilitado()) {
-    res.status(404).json({ ok: false, message: "Not found" });
-    return;
+const normalizarTexto = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+const obtenerRequestId = (req: Request, res: Response) => {
+  const fromLocals = normalizarTexto(res.locals.requestId);
+  if (fromLocals) {
+    return fromLocals;
   }
-  next();
+  const header = req.headers["x-request-id"];
+  return normalizarTexto(Array.isArray(header) ? header[0] : header);
+};
+const obtenerUsuarioId = (req: Request, res: Response) => {
+  const authUserId = normalizarTexto(res.locals.auth?.sub);
+  if (authUserId) {
+    return authUserId;
+  }
+
+  const headerValue = req.headers["x-usuario-id"] ?? req.headers["x-user-id"];
+  const headerId = normalizarTexto(Array.isArray(headerValue) ? headerValue[0] : headerValue);
+  if (headerId) {
+    return headerId;
+  }
+
+  const queryValue = req.query.usuarioId ?? req.query.userId;
+  return normalizarTexto(Array.isArray(queryValue) ? queryValue[0] : queryValue);
+};
+const responderKlapDeprecado = (req: Request, res: Response) => {
+  const requestId = obtenerRequestId(req, res) || null;
+  const userId = obtenerUsuarioId(req, res) || null;
+
+  logger.warn("klap_deprecated_attempt", {
+    event: "klap_deprecated_attempt",
+    requestId,
+    userId,
+    method: req.method,
+    path: req.originalUrl,
+  });
+
+  res.status(410).json({
+    ok: false,
+    code: "KLAP_DEPRECATED",
+    errorCode: "PAYMENT_METHOD_DEPRECATED",
+    message: "Klap is no longer supported",
+  });
 };
 
 router.post("/", crearPago);
 router.post("/mercadopago", crearMercadoPago);
 router.post("/transbank", crearTransbankPago);
-router.post("/klap", requireKlapEnabled, crearKlapPago);
-router.post("/klap/webhook", requireKlapEnabled, recibirKlapWebhook);
-router.post("/klap/mock-webhook", requireKlapEnabled, recibirKlapMockWebhook);
+router.all("/klap", responderKlapDeprecado);
+router.all("/klap/webhook", responderKlapDeprecado);
+router.all("/klap/mock-webhook", responderKlapDeprecado);
 router.post("/applepay-dev/create-intent", requireApplePayDevEnabled, crearApplePayDevIntent);
 router.post("/stripe/intent", crearStripeIntent);
 router.post("/stripe/create-intent", crearStripeCreateIntent);
