@@ -1,6 +1,9 @@
 import { EcommerceMetodoPago } from "@prisma/client";
 import { ErrorApi } from "../../../lib/errores";
 
+const UNSUPPORTED_PAYMENT_METHOD_CODE = "UNSUPPORTED_PAYMENT_METHOD";
+const UNSUPPORTED_PAYMENT_METHOD_MESSAGE = "Payment method not supported";
+
 export const SUPPORTED_PAYMENT_METHODS = [
   EcommerceMetodoPago.TRANSBANK,
   EcommerceMetodoPago.APPLE_PAY,
@@ -21,14 +24,14 @@ const normalizarMetodoPago = (value: unknown) => {
 
 const crearErrorMetodoNoSoportado = (method: string, source: "body" | "query") =>
   new ErrorApi(
-    "Metodo de pago no soportado",
+    UNSUPPORTED_PAYMENT_METHOD_MESSAGE,
     400,
     {
       source,
       metodoRecibido: method || null,
       metodosSoportados: SUPPORTED_PAYMENT_METHODS,
     },
-    "UNSUPPORTED_PAYMENT_METHOD"
+    UNSUPPORTED_PAYMENT_METHOD_CODE
   );
 
 export const parseMetodoPagoSoportado = (

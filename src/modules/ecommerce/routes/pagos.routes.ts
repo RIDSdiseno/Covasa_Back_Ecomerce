@@ -67,7 +67,6 @@ const responderKlapDeprecado = (req: Request, res: Response) => {
   res.status(410).json({
     ok: false,
     code: "KLAP_DEPRECATED",
-    errorCode: "PAYMENT_METHOD_DEPRECATED",
     message: "Klap is no longer supported",
   });
 };

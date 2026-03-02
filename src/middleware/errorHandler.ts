@@ -11,6 +11,24 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction
 ) => {
+  if (err.code === "P2023" && err.message?.includes("EcommerceMetodoPago")) {
+    logger.warn("request_error", {
+      method: req.method,
+      path: req.path,
+      status: 400,
+      code: "UNSUPPORTED_PAYMENT_METHOD",
+      error: {
+        name: err.name,
+        message: err.message,
+      },
+    });
+    return res.status(400).json({
+      ok: false,
+      message: "Payment method not supported",
+      code: "UNSUPPORTED_PAYMENT_METHOD",
+    });
+  }
+
   if (err instanceof ZodError) {
     logger.warn("request_validation_error", {
       method: req.method,
