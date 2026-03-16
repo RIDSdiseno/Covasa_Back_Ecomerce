@@ -1,4 +1,5 @@
 import { ErrorApi } from "../../../lib/errores";
+import { resolverUbicacionDireccion } from "../../../services/dpaCatalog.service";
 import { construirDireccionLinea, construirNombreCompleto, normalizarTexto } from "../common/ecommerce.utils";
 import { buscarClientePorId } from "./clientes.repo";
 import { obtenerDireccionPrincipal } from "../usuarios/usuarios.repo";
@@ -13,6 +14,10 @@ export const obtenerClienteServicio = async (id: string) => {
   }
 
   const direccion = await obtenerDireccionPrincipal(cliente.id);
+  const ubicacion = resolverUbicacionDireccion({
+    region: direccion?.region,
+    comuna: direccion?.comuna,
+  });
 
   return {
     id: cliente.id,
@@ -26,9 +31,11 @@ export const obtenerClienteServicio = async (id: string) => {
           telefono: direccion.telefonoRecibe,
           email: direccion.email,
           direccion: construirDireccionLinea(direccion.calle, direccion.numero, direccion.depto),
-          comuna: direccion.comuna,
+          comuna: ubicacion.comuna ?? direccion.comuna,
+          comunaId: ubicacion.comunaId,
           ciudad: direccion.ciudad,
-          region: direccion.region,
+          region: ubicacion.region ?? direccion.region,
+          regionId: ubicacion.regionId,
           notas: direccion.notas,
         }
       : null,

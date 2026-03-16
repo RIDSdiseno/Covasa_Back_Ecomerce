@@ -1,83 +1,87 @@
-import { Router, type Response } from "express";
-import { ErrorApi } from "../lib/errores";
+import { Router } from "express";
 import { logger } from "../lib/logger";
-import {
-  DPA_UNAVAILABLE_MESSAGE,
-  getComunas,
-  getComunasByRegion,
-  getRegiones,
-} from "../services/chileDpa.service";
+import { listarComunasCatalogo, listarRegionesCatalogo } from "../services/dpaCatalog.service";
 
 const router = Router();
-
-const requireParam = (value: string | undefined, message: string) => {
-  const normalized = String(value ?? "").trim();
-  if (!normalized) {
-    throw new ErrorApi(message, 400);
-  }
-  return normalized;
-};
-
-const getErrorMessage = (error: unknown) => {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-};
+const mxCache = new Map<string, { valido: boolean; expiresAt: number }>();
+const MX_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 const getQueryString = (value: unknown) => {
   if (typeof value === "string") {
-    return value;
+    return value.trim();
   }
+
   if (Array.isArray(value) && typeof value[0] === "string") {
-    return value[0];
+    return value[0].trim();
   }
+
   return "";
 };
 
-const sendDpaError = (res: Response, error: unknown) => {
-  if (error instanceof ErrorApi && error.status < 500) {
-    return res.status(error.status).json({ ok: false, message: error.message });
+const verificarMxDominio = async (dominio: string): Promise<boolean> => {
+  const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(dominio)}&type=MX`;
+  const response = await fetch(url, {
+    headers: { Accept: "application/dns-json" },
+    signal: AbortSignal.timeout(5_000),
+  });
+
+  if (!response.ok) {
+    return false;
   }
 
-  return res.status(503).json({ ok: false, message: DPA_UNAVAILABLE_MESSAGE });
+  const data = (await response.json()) as { Answer?: Array<{ type: number }> };
+  return Array.isArray(data.Answer) && data.Answer.some((record) => record.type === 15);
 };
 
-router.get("/regiones", async (_req, res) => {
-  try {
-    const data = await getRegiones();
-    return res.json({ ok: true, data });
-  } catch (error) {
-    logger.warn(`[DPA] Route /regiones FAIL: ${getErrorMessage(error)}`);
-    return sendDpaError(res, error);
-  }
+router.get("/regiones", (_req, res) => {
+  const data = listarRegionesCatalogo();
+  return res.json({ ok: true, data });
 });
 
-router.get("/comunas", async (req, res) => {
-  try {
-    const region = getQueryString(req.query.region);
-    const data = await getComunas(region);
-    return res.json({ ok: true, data });
-  } catch (error) {
-    logger.warn(`[DPA] Route /comunas FAIL: ${getErrorMessage(error)}`);
-    return sendDpaError(res, error);
-  }
+router.get("/comunas", (req, res) => {
+  const regionId =
+    getQueryString(req.query.regionId) ||
+    getQueryString(req.query.region) ||
+    getQueryString(req.query.codigoRegion);
+
+  const data = listarComunasCatalogo(regionId || undefined);
+  return res.json({ ok: true, data });
 });
 
-// Mantener endpoint legacy para compatibilidad.
-router.get("/regiones/:codigo/comunas", async (req, res) => {
+router.get("/regiones/:codigo/comunas", (req, res) => {
+  const codigo = getQueryString(req.params.codigo);
+  if (!codigo) {
+    return res.status(400).json({ ok: false, message: "Region requerida" });
+  }
+
+  const data = listarComunasCatalogo(codigo);
+  return res.json({ ok: true, data });
+});
+
+router.get("/verificar-email", async (req, res) => {
+  const dominio = getQueryString(req.query.dominio).toLowerCase();
+
+  if (!dominio || dominio.length > 253 || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(dominio)) {
+    return res.json({ valido: false, motivo: "dominio_invalido" });
+  }
+
+  const cached = mxCache.get(dominio);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json({ valido: cached.valido, dominio, cache: true });
+  }
+
   try {
-    const region = requireParam(req.params.codigo, "Region requerida");
-    const data = await getComunasByRegion(region);
-    return res.json({ ok: true, data });
+    const valido = await verificarMxDominio(dominio);
+    mxCache.set(dominio, { valido, expiresAt: Date.now() + MX_CACHE_TTL });
+    return res.json({ valido, dominio });
   } catch (error) {
-    logger.warn(`[DPA] Route /regiones/:codigo/comunas FAIL: ${getErrorMessage(error)}`);
-    return sendDpaError(res, error);
+    logger.warn("[DPA] verificar-email fallo", {
+      dominio,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    mxCache.set(dominio, { valido: false, expiresAt: Date.now() + MX_CACHE_TTL });
+    return res.json({ valido: false, dominio, motivo: "sin_mx" });
   }
 });
 

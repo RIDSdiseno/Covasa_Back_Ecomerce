@@ -5,6 +5,7 @@ import type { JWTPayload } from "jose";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import { prisma } from "../../../lib/prisma";
+import { resolverUbicacionDireccion } from "../../../services/dpaCatalog.service";
 import { construirDireccionLinea, normalizarTexto } from "../common/ecommerce.utils";
 import {
   buscarClientePorEmail,
@@ -132,6 +133,34 @@ type GoogleLoginPayload = {
   credential: string;
 };
 
+type DireccionPrincipal = Awaited<ReturnType<typeof obtenerDireccionPrincipal>>;
+
+const mapearDireccionPrincipal = (direccion: DireccionPrincipal) => {
+  if (!direccion) {
+    return null;
+  }
+
+  const direccionLinea = construirDireccionLinea(direccion.calle, direccion.numero, direccion.depto);
+  const ubicacion = resolverUbicacionDireccion({
+    region: direccion.region,
+    comuna: direccion.comuna,
+  });
+
+  return {
+    id: direccion.id,
+    nombreContacto: direccion.nombreRecibe,
+    telefono: direccion.telefonoRecibe,
+    email: direccion.email,
+    direccion: direccionLinea,
+    comuna: ubicacion.comuna ?? direccion.comuna,
+    comunaId: ubicacion.comunaId,
+    ciudad: direccion.ciudad,
+    region: ubicacion.region ?? direccion.region,
+    regionId: ubicacion.regionId,
+    notas: direccion.notas,
+  };
+};
+
 export const registrarUsuarioServicio = async (payload: RegistroPayload) => {
   const nombre = normalizarTexto(payload.nombre);
   const email = normalizarEmail(payload.email);
@@ -207,10 +236,6 @@ export const loginUsuarioServicio = async (payload: LoginPayload) => {
   const ecommerceClienteId = await obtenerEcommerceClienteIdPorUsuario(usuario.id);
   const direccion = ecommerceClienteId ? await obtenerDireccionPrincipal(ecommerceClienteId) : null;
 
-  const direccionLinea = direccion
-    ? construirDireccionLinea(direccion.calle, direccion.numero, direccion.depto)
-    : "";
-
   return {
     usuario: {
       id: usuario.id,
@@ -220,19 +245,7 @@ export const loginUsuarioServicio = async (payload: LoginPayload) => {
       ecommerceClienteId,
       createdAt: usuario.createdAt,
     },
-    direccionPrincipal: direccion
-      ? {
-          id: direccion.id,
-          nombreContacto: direccion.nombreRecibe,
-          telefono: direccion.telefonoRecibe,
-          email: direccion.email,
-          direccion: direccionLinea,
-          comuna: direccion.comuna,
-          ciudad: direccion.ciudad,
-          region: direccion.region,
-          notas: direccion.notas,
-        }
-      : null,
+    direccionPrincipal: mapearDireccionPrincipal(direccion),
   };
 };
 
@@ -346,12 +359,9 @@ export const loginMicrosoftServicio = async (payload: MicrosoftLoginPayload) => 
     return { usuario, cliente };
   });
 
-const ecommerceClienteId =
-  resultado.cliente?.id ?? (await obtenerEcommerceClienteIdPorUsuario(resultado.usuario.id));
+  const ecommerceClienteId =
+    resultado.cliente?.id ?? (await obtenerEcommerceClienteIdPorUsuario(resultado.usuario.id));
   const direccion = ecommerceClienteId ? await obtenerDireccionPrincipal(ecommerceClienteId) : null;
-  const direccionLinea = direccion
-    ? construirDireccionLinea(direccion.calle, direccion.numero, direccion.depto)
-    : "";
 
   const token = jwt.sign(
     {
@@ -373,19 +383,7 @@ const ecommerceClienteId =
       ecommerceClienteId,
       createdAt: resultado.usuario.createdAt,
     },
-    direccionPrincipal: direccion
-      ? {
-          id: direccion.id,
-          nombreContacto: direccion.nombreRecibe,
-          telefono: direccion.telefonoRecibe,
-          email: direccion.email,
-          direccion: direccionLinea,
-          comuna: direccion.comuna,
-          ciudad: direccion.ciudad,
-          region: direccion.region,
-          notas: direccion.notas,
-        }
-      : null,
+    direccionPrincipal: mapearDireccionPrincipal(direccion),
   };
 };
 
@@ -395,11 +393,8 @@ export const obtenerUsuarioServicio = async (usuarioId: string) => {
     throw new ErrorApi("Usuario no encontrado", 404);
   }
 
-const ecommerceClienteId = await obtenerEcommerceClienteIdPorUsuario(usuario.id);
+  const ecommerceClienteId = await obtenerEcommerceClienteIdPorUsuario(usuario.id);
   const direccion = ecommerceClienteId ? await obtenerDireccionPrincipal(ecommerceClienteId) : null;
-  const direccionLinea = direccion
-    ? construirDireccionLinea(direccion.calle, direccion.numero, direccion.depto)
-    : "";
 
   return {
     usuario: {
@@ -410,19 +405,7 @@ const ecommerceClienteId = await obtenerEcommerceClienteIdPorUsuario(usuario.id)
       ecommerceClienteId,
       createdAt: usuario.createdAt,
     },
-    direccionPrincipal: direccion
-      ? {
-          id: direccion.id,
-          nombreContacto: direccion.nombreRecibe,
-          telefono: direccion.telefonoRecibe,
-          email: direccion.email,
-          direccion: direccionLinea,
-          comuna: direccion.comuna,
-          ciudad: direccion.ciudad,
-          region: direccion.region,
-          notas: direccion.notas,
-        }
-      : null,
+    direccionPrincipal: mapearDireccionPrincipal(direccion),
   };
 };
 
@@ -533,12 +516,9 @@ export const loginGoogleServicio = async (payload: GoogleLoginPayload) => {
     return { usuario, cliente };
   });
 
-const ecommerceClienteId =
-  resultado.cliente?.id ?? (await obtenerEcommerceClienteIdPorUsuario(resultado.usuario.id));
+  const ecommerceClienteId =
+    resultado.cliente?.id ?? (await obtenerEcommerceClienteIdPorUsuario(resultado.usuario.id));
   const direccion = ecommerceClienteId ? await obtenerDireccionPrincipal(ecommerceClienteId) : null;
-  const direccionLinea = direccion
-    ? construirDireccionLinea(direccion.calle, direccion.numero, direccion.depto)
-    : "";
 
   const token = jwt.sign(
     {
@@ -560,18 +540,6 @@ const ecommerceClienteId =
       ecommerceClienteId,
       createdAt: resultado.usuario.createdAt,
     },
-    direccionPrincipal: direccion
-      ? {
-          id: direccion.id,
-          nombreContacto: direccion.nombreRecibe,
-          telefono: direccion.telefonoRecibe,
-          email: direccion.email,
-          direccion: direccionLinea,
-          comuna: direccion.comuna,
-          ciudad: direccion.ciudad,
-          region: direccion.region,
-          notas: direccion.notas,
-        }
-      : null,
+    direccionPrincipal: mapearDireccionPrincipal(direccion),
   };
 };
