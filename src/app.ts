@@ -10,10 +10,30 @@ import fs from "fs";
 
 const app = express();
 
+/**
+ * Rutas mínimas arriba de todo para probar Railway/proxy.
+ * No pasan por requestLogger, CORS, JSON parser ni rutas principales.
+ */
+app.get("/", (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    service: "covasa-back",
+  });
+});
+
+app.get("/__ping", (_req, res) => {
+  res.status(200).send("COVASA-BACK-OK");
+});
+
 const parseOrigins = (raw: string) =>
   raw
     .split(",")
-    .map((origin) => origin.trim())
+    .map((origin) =>
+      origin
+        .trim()
+        .replace(/^["']|["']$/g, "")
+        .replace(/\/$/, "")
+    )
     .filter(Boolean);
 
 const envAllowed = [
@@ -21,12 +41,23 @@ const envAllowed = [
   ...parseOrigins(process.env.FRONTEND_ORIGINS || ""),
   ...parseOrigins(process.env.FRONTEND_ORIGIN || ""),
   ...parseOrigins(process.env.ALLOWED_ORIGINS || ""),
+
+  // Respaldos para desarrollo local
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5174",
+  "http://localhost:5175",
+  "http://127.0.0.1:5175",
 ];
 
 const allowAll = process.env.CORS_ALLOW_ALL === "true";
 const allowedOrigins = [...new Set(envAllowed)];
+
 const publicBackendUrl =
-  (process.env.API_URL || process.env.BASE_URL || process.env.BACKEND_URL || "").trim() || undefined;
+  (process.env.API_URL || process.env.BASE_URL || process.env.BACKEND_URL || "").trim() ||
+  undefined;
+
 const publicFrontUrl =
   (process.env.ECOMMERCE_FRONT_URL || process.env.FRONT_URL || "").trim() || undefined;
 
@@ -64,7 +95,7 @@ const extraerPrefijo = (layer: RouteLayer) => {
     return "";
   }
 
-  let path = source
+  const path = source
     .replace("^\\/", "/")
     .replace("\\/?(?=\\/|$)", "")
     .replace("\\/?$", "")
@@ -89,7 +120,14 @@ const listarRutas = (appRef: typeof app) => {
         const methods = Object.keys(layer.route.methods ?? {}).filter(
           (method) => layer.route?.methods?.[method]
         );
-        methods.forEach((method) => rutas.push({ method: method.toUpperCase(), path: fullPath }));
+
+        methods.forEach((method) =>
+          rutas.push({
+            method: method.toUpperCase(),
+            path: fullPath,
+          })
+        );
+
         return;
       }
 
@@ -106,6 +144,20 @@ const listarRutas = (appRef: typeof app) => {
 
 app.set("trust proxy", 1);
 
+/**
+ * Log de entrada para confirmar que Railway sí llega a Express.
+ * Puedes dejarlo temporalmente mientras depuras el 502.
+ */
+app.use((req, _res, next) => {
+  logger.info("request_entered_app", {
+    method: req.method,
+    url: req.originalUrl,
+    origin: req.headers.origin,
+  });
+
+  next();
+});
+
 app.use(requestLogger);
 
 app.use((req, res, next) => {
@@ -114,11 +166,14 @@ app.use((req, res, next) => {
   }
 
   const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+
   const requestedMethod =
     typeof req.headers["access-control-request-method"] === "string"
       ? req.headers["access-control-request-method"]
       : undefined;
+
   const requestedHeadersRaw = req.headers["access-control-request-headers"];
+
   const requestedHeaders = Array.isArray(requestedHeadersRaw)
     ? requestedHeadersRaw.join(",")
     : requestedHeadersRaw;
@@ -142,17 +197,24 @@ app.use((req, res, next) => {
   return next();
 });
 
-const corsOptions = {
-  origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
     if (!origin || allowAll) {
       return callback(null, true);
     }
 
-    if (allowedOrigins.includes(origin)) {
+    const cleanOrigin = origin.trim().replace(/\/$/, "");
+
+    if (allowedOrigins.includes(cleanOrigin)) {
       return callback(null, true);
     }
 
-    logger.warn("cors_origin_blocked", { origin, allowedOrigins });
+    logger.warn("cors_origin_blocked", {
+      origin,
+      cleanOrigin,
+      allowedOrigins,
+    });
+
     return callback(null, false);
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -163,28 +225,32 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
 app.options("*", cors(corsOptions));
-
-app.get("/__ping", (_req, res) => {
-  res.status(200).send("COVASA-BACK-OK");
-});
 
 const uploadsDir = path.join(__dirname, "..", "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
 app.use("/uploads", express.static(uploadsDir));
 
+/**
+ * Webhooks Stripe antes de express.json().
+ */
 app.use("/api/ecommerce/payments/stripe/webhook", express.raw({ type: "application/json" }));
 app.use("/api/ecommerce/pagos/stripe/webhook", express.raw({ type: "application/json" }));
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
 app.use("/api", routes);
 
 app.get("/debug/routes", (_req, res) => {
   const rutas = listarRutas(app).sort(
     (a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.method)
   );
-  res.json({ ok: true, data: rutas });
+
+  res.json({
+    ok: true,
+    data: rutas,
+  });
 });
 
 app.use(notFound);

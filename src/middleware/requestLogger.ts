@@ -61,33 +61,41 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
   const path = req.path;
   const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
 
-  requestContext.run({ requestId }, () => {
-    logger.info("request_start", {
-      method,
-      path,
-      ip,
-      origin,
-    });
-
-    res.on("finish", () => {
-      const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
-      const route = resolverRoute(req);
-      const module = resolverModulo(req);
-      const userId = res.locals.auth?.sub as string | undefined;
-
-      logger.info("request_end", {
+  try {
+    requestContext.run({ requestId }, () => {
+      logger.info("request_start", {
         method,
         path,
-        route,
-        module,
-        status: res.statusCode,
-        durationMs: Math.round(durationMs),
         ip,
-        userId,
         origin,
       });
+
+      res.on("finish", () => {
+        const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+        const route = resolverRoute(req);
+        const module = resolverModulo(req);
+        const userId = res.locals.auth?.sub as string | undefined;
+
+        logger.info("request_end", {
+          method,
+          path,
+          route,
+          module,
+          status: res.statusCode,
+          durationMs: Math.round(durationMs),
+          ip,
+          userId,
+          origin,
+        });
+      });
+
+      next();
+    });
+  } catch (error) {
+    logger.error("request_logger_error", {
+      error: error instanceof Error ? error.message : String(error),
     });
 
     next();
-  });
+  }
 };
